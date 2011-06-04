@@ -20,42 +20,6 @@ config_string(krb5_context ctx, const char *opt, char **result)
     }
 }
 
-kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
-	struct k5scfg * cx = malloc(sizeof(struct k5scfg));
-	char * passwdpath = NULL;
-	FILE * passwdfile = NULL;
-	int rc;
-	
-	if(cx == NULL)
-		return -ENOMEM;
-	memset(cx, 0, sizeof(struct k5scfg));
-//	krb5_init_context(&cx->kcx);
-	cx->kcx = cxin;
-	*modinfo = (kadm5_hook_modinfo *)cx;
-	
-	config_string(cx->kcx, "basedn", &cx->basedn);
-	config_string(cx->kcx, "ldapuri", &cx->ldapuri);
-	config_string(cx->kcx, "syncuser", &cx->ldapuserdn);
-	config_string(cx->kcx, "password", &passwdpath);
-	if(!cx->basedn || !cx->ldapuri || !cx->ldapuserdn) {
-		cleanup(cxin, *modinfo);
-		krb5_set_error_message(cxin, EINVAL, "Must specify both basedn and ldapuri.");
-		return -1;
-	}
-	
-	passwdfile = fopen(passwdpath, "r");
-	cx->ldapuserpassword = malloc(128);
-	fgets(cx->ldapuserpassword, 128, passwdfile);
-	fclose(passwdfile);
-	if(!cx->ldapuserpassword) {
-		cleanup(cxin, *modinfo);
-		krb5_set_error_message(cxin, EINVAL, "Must specify a password to connect to AD");
-		return -1;
-	}
-	
-	return 0;
-}
-
 void cleanup(krb5_context cxin, kadm5_hook_modinfo * modinfo) {
 	struct k5scfg * cx = (struct k5scfg*)modinfo;
 	if(cx->basedn)
@@ -72,10 +36,54 @@ void cleanup(krb5_context cxin, kadm5_hook_modinfo * modinfo) {
 		memset(cx->ldapuserpassword, 0, 128);
 		free(cx->ldapuserpassword);
 	}
-	if(cx->ldapuserdn)
-		free(cx->ldapuserdn);
 	if(cx)
 		free(cx);
+}
+
+
+kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
+	struct k5scfg * cx = malloc(sizeof(struct k5scfg));
+	char * passwdpath = NULL;
+	FILE * passwdfile = NULL;
+	int rc;
+	
+	if(cx == NULL)
+		return -ENOMEM;
+	
+	cx->kcx = cxin;
+	*modinfo = (kadm5_hook_modinfo *)cx;
+	config_string(cx->kcx, "basedn", &cx->basedn);
+	config_string(cx->kcx, "ldapuri", &cx->ldapuri);
+	config_string(cx->kcx, "syncuser", &cx->ad_princ_unparsed);
+	config_string(cx->kcx, "password", &passwdpath);
+	if(!cx->basedn || !cx->ldapuri || !strlen(cx->ad_princ_unparsed)) {
+		cleanup(cxin, *modinfo);
+		krb5_set_error_message(cxin, EINVAL, "Must specify both basedn and ldapuri.");
+		return -1;
+	}
+	
+	rc = krb5_parse_name(cx->kcx, username, &cx->ad_principal);
+	if(rc != KRB5_SUCCESS) {
+		krb5_set_error_message(cxin, rc, "Error parsing %s", cx->ad_princ_unparsed);
+		cleanup(cxin, *modinfo);
+		return -1;
+	}
+	
+	passwdfile = fopen(passwdpath, "r");
+	cx->password = malloc(128);
+	*cx->password = 0;
+	fgets(cx->password, 128, passwdfile);
+	fclose(passwdfile);
+	if(!cx->password || strlen(cx->password) == 0) {
+		cleanup(cxin, *modinfo);
+		krb5_set_error_message(cxin, EINVAL, "Must specify a password to connect to AD");
+		return -1;
+	}
+	rc = get_creds(cx);
+	if(rc != 0)
+		return -1;
+	
+	return 0;
 }
 
 krb5_error_code kadm5_hook_krb5sync_initvt(krb5_context context, int maj_ver, int min_ver,

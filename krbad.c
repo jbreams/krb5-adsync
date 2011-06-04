@@ -5,7 +5,6 @@
 #include <krb5/kadm5_hook_plugin.h>
 #include "krb5sync.h"
 
-
 krb5_principal get_ad_principal(struct k5scfg * cx, krb5_principal pin) {
 	krb5_principal pout;
 	if(krb5_copy_principal(cx->kcx, pin, &pout) != 0)
@@ -26,27 +25,35 @@ int get_creds(struct k5scfg * cx) {
 		return rc;
 	}
 	
-	rc = krb5_get_init_creds_password(cx->kcx, &creds, cx->ad_principal, cx->kt, 0, NULL, NULL);
+	rc = krb5_get_rewewed_creds(cx->kcx, &creds, cx->ad_principal, id, NULL);
+	if(rc != KRB5_SUCCESS) {
+		rc = krb5_cc_initialize(cx->kcx, id, cx->ad_principal);
+		if(rc != KRB5_SUCCESS) {
+			krb5_set_error_message(cx->kcx, rc, "Cannot initialize ccache for %s",
+								   cx->ad_princ_unparsed);
+			krb5_cc_close(cx->kcx, id);
+			return rc;
+		}
+		rc = krb5_get_init_creds_password(cx->kcx, &creds, cx->ad_principal,
+										  cx->ldapuserpassword, NULL, NULL,
+										  0, NULL, NULL);
+	}
+	
 	if(rc != 0) {
-		krb5_set_error_message(cx->kcx, rc, "Cannot get initial creds for %s", cx->ad_princ_unparsed);
+		krb5_set_error_message(cx->kcx, rc, "Cannot get credentials for %s", 
+							   cx->ad_princ_unparsed);
+		krb5_cc_close(cx->kcx, id);
 		return rc;
 	}
 	
-	krb5_cc_remove_cred(cx->kcx, id, KRB5_TC_MATCH_SRV_NAMEONLY, &creds);
-	
-store_creds:
 	rc = krb5_cc_store_cred(cx->kcx, id, &creds);
 	
-	if(rc == KRB5_FCC_NOFILE) {
-		rc = krb5_cc_initialize(cx->kcx, id, cx->ad_principal);
-		if(rc == 0)
-			goto store_creds;
-	}
-	
 	krb5_free_cred_contents(cx->kcx, &creds);
+	krb5_cc_close(cx->kcx, id);
 	
 	if(rc != 0) {
-		krb5_set_error_message(cx->kcx, rc, "Error storing credentials for %s", cx->ad_princ_unparsed);
+		krb5_set_error_message(cx->kcx, rc, "Error storing credentials for %s", 
+							   cx->ad_princ_unparsed);
 		return rc;
 	}
 	
@@ -74,27 +81,25 @@ kadm5_ret_t handle_chpass(krb5_context context,
 	if(get_creds(cx) != 0)
 		return KRB5_NOCREDS_SUPPLIED;
 	
-	krb5_cc_default(cx->kcx, &id);
-	
 	krb5_unparse_name(cx->kcx, targetPrincipal, &targetUnparsed);
 	
-	rc = get_ad_ldap_obj(cx, targetUnparsed, NULL);
-	krb5_free_unparsed_name(cx->kcx, targetUnparsed);
-
-	if(rc != 0) {
+	if(!check_update_okay(cx, targetUnparsed, NULL)) {
 		krb5_free_principal(cx->kcx, targetPrincipal);
-		krb5_cc_close(cx->kcx, id);
+		krb5_free_unparsed_name(cx->kcx, targetUnparsed);
 		return 0;
 	}
 	
+	krb5_cc_resolve(cx->kcx, CACHE_NAME, &id);
 	rc = krb5_set_password_using_ccache(cx->kcx, id,
 		(char*)newpass, targetPrincipal, &result_code, 
 		&result_code_string, &result_string);
+	krb5_cc_close(cx->kcx, id);
 	if(rc != 0)
 		krb5_set_error_message(context, rc, "Error setting password for %s: %s %s",
 				targetUnparsed, result_code_string.data, result_string.data);
 	
 	krb5_free_principal(cx->kcx, targetPrincipal);
+	krb5_free_unparsed_name(cx->kcx, targetUnparsed);
 	free(result_string.data);
 	free(result_code_string.data);
     return rc;
