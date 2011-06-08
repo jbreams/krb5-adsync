@@ -7,10 +7,12 @@
 
 krb5_principal get_ad_principal(struct k5scfg * cx, krb5_principal pin) {
 	krb5_principal pout;
+	krb5_data *realm, oldrealm; 
 	if(krb5_copy_principal(cx->kcx, pin, &pout) != 0)
 		return NULL;
 	
-	krb5_princ_set_realm(cx->kcx, pout, krb5_princ_realm(cx->kcx, cx->ad_principal));
+	krb5_copy_data(cx->kcx, krb5_princ_realm(cx->kcx, cx->ad_principal), &realm);
+	krb5_princ_set_realm(cx->kcx, pout, realm);
 	return pout;
 }
 
@@ -25,18 +27,18 @@ int get_creds(struct k5scfg * cx) {
 		return rc;
 	}
 	
-	rc = krb5_get_rewewed_creds(cx->kcx, &creds, cx->ad_principal, id, NULL);
-	if(rc != KRB5_SUCCESS) {
+	rc = krb5_get_renewed_creds(cx->kcx, &creds, cx->ad_principal, id, NULL);
+	if(rc != 0) {
 		rc = krb5_cc_initialize(cx->kcx, id, cx->ad_principal);
-		if(rc != KRB5_SUCCESS) {
+		if(rc != 0) {
 			krb5_set_error_message(cx->kcx, rc, "Cannot initialize ccache for %s",
 								   cx->ad_princ_unparsed);
 			krb5_cc_close(cx->kcx, id);
 			return rc;
 		}
 		rc = krb5_get_init_creds_password(cx->kcx, &creds, cx->ad_principal,
-										  cx->ldapuserpassword, NULL, NULL,
-										  0, NULL, NULL);
+						  cx->password, NULL, NULL,
+						  0, NULL, NULL);
 	}
 	
 	if(rc != 0) {
@@ -83,7 +85,7 @@ kadm5_ret_t handle_chpass(krb5_context context,
 	
 	krb5_unparse_name(cx->kcx, targetPrincipal, &targetUnparsed);
 	
-	if(!check_update_okay(cx, targetUnparsed, NULL)) {
+	if(check_update_okay(cx, targetUnparsed, NULL) != 1) {
 		krb5_free_principal(cx->kcx, targetPrincipal);
 		krb5_free_unparsed_name(cx->kcx, targetUnparsed);
 		return 0;

@@ -4,7 +4,7 @@
 #include <ldap.h>
 #include <krb5/kadm5_hook_plugin.h>
 #include <sasl/sasl.h>
-#include <gssapi/gssapi.h>
+#include <gssapi/gssapi_krb5.h>
 #include "krb5sync.h"
 
 static int
@@ -17,21 +17,8 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
     {
 		if (interact->id == SASL_CB_USER)
 		{
-			if (authzid != NULL)
-			{
-				interact->result = authzid;
-				interact->len = strlen (authzid);
-			}
-			else if (interact->defresult != NULL)
-			{
-				interact->result = interact->defresult;
-				interact->len = strlen (interact->defresult);
-			}
-			else
-			{
-				interact->result = "";
-				interact->len = 0;
-			}
+			interact->result = "";
+			interact->len = 0;
 		}
 		else
 		{
@@ -44,11 +31,9 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
 
 LDAP * get_ldap_conn(struct k5scfg * cx) {
 	LDAP * ldConn;
-	int rc, option = LDAP_VERSION3, gsserr;
+	unsigned int gsserr;
+	int rc, option = LDAP_VERSION3;
 	const char * oldccname = NULL;
-	
-	if(get_creds(cx) != 0)
-		return NULL;
 	
 	rc = ldap_initialize(&ldConn, cx->ldapuri);
 	if(rc != 0) {
@@ -64,14 +49,16 @@ LDAP * get_ldap_conn(struct k5scfg * cx) {
 		return NULL;
 	}
 	
+	ldap_set_option(ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
+	
 	if(gss_krb5_ccache_name(&gsserr, CACHE_NAME, &oldccname) != GSS_S_COMPLETE) {
 		krb5_set_error_message(cx->kcx, rc, "Error setting credentials cache.");
 		return NULL;
 	}
 	
-	rc = ldap_sasl_interactive_bind_s(ldConn, cx->ldapuserdn, "GSSAPI",
-									  NULL, NULL, LDAP_SASL_QUIET,
-									  do_sasl_interact, (void*)cx->ldapuserpassword);
+	rc = ldap_sasl_interactive_bind_s(ldConn, NULL, "GSSAPI",
+					  NULL, NULL, LDAP_SASL_QUIET,
+					  do_sasl_interact, NULL);
 	gss_krb5_ccache_name(&gsserr, oldccname, NULL);
 	if(rc != LDAP_SUCCESS)
 		return NULL;
@@ -84,7 +71,7 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut) {
 	int parts = 1, i, rc;
 	LDAP * ldConn = NULL;
 	LDAPMessage * msg = NULL;
-	const char * noattrs[2] = { "1.1", NULL };
+	char * noattrs[2] = { "1.1", NULL };
 	
 	ldConn = get_ldap_conn(cx);
 	if(ldConn == NULL)
@@ -94,10 +81,11 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut) {
 	sprintf(filter, "(userPrincipalName=%s)", principal);
 	
 	rc = ldap_search_ext_s(ldConn, cx->basedn, LDAP_SCOPE_SUBTREE, filter,
-						   noattrs, 0, NULL, NULL, NULL, 0, &msg);
+			   noattrs, 0, NULL, NULL, NULL, 0, &msg);
 	if(rc != 0) {
 		ldap_unbind_ext_s(ldConn, NULL, NULL);
-		*ldOut = NULL;
+		if(ldOut)
+			*ldOut = NULL;
 		krb5_set_error_message(cx->kcx, rc, "Error searching for %s: %s",
 							   principal, ldap_err2string(rc));
 		return -1;
