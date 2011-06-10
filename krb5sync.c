@@ -38,6 +38,14 @@ void cleanup(krb5_context cxin, kadm5_hook_modinfo * modinfo) {
 	}
 	if(cx->kcx)
 		krb5_free_context(cx->kcx);
+	if(cx->updatefor) {
+		int i;
+		for(i = 0; i < cx->dncount; i++) {
+			if(cx->updatefor[i].dn)
+				free(cx->updatefor[i].dn);
+		}
+		free(cx->updatefor);
+	}
 	if(cx)
 		free(cx);
 }
@@ -45,9 +53,9 @@ void cleanup(krb5_context cxin, kadm5_hook_modinfo * modinfo) {
 
 kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 	struct k5scfg * cx = malloc(sizeof(struct k5scfg));
-	char * passwdpath = NULL;
-	FILE * passwdfile = NULL;
-	int rc;
+	char * path = NULL, *buffer;
+	FILE * file = NULL;
+	int rc, i;
 	
 	if(cx == NULL)
 		return -ENOMEM;
@@ -57,7 +65,8 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 	config_string(cx->kcx, "basedn", &cx->basedn);
 	config_string(cx->kcx, "ldapuri", &cx->ldapuri);
 	config_string(cx->kcx, "syncuser", &cx->ad_princ_unparsed);
-	config_string(cx->kcx, "password", &passwdpath);
+	config_string(cx->kcx, "password", &path);
+	config_string(cx->kcx, "ldapconnectretries", &buffer);
 	if(!cx->basedn || !cx->ldapuri || !strlen(cx->ad_princ_unparsed)) {
 		cleanup(cxin, *modinfo);
 		krb5_set_error_message(cxin, EINVAL, "Must specify both basedn and ldapuri.");
@@ -71,11 +80,13 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 		return rc;
 	}
 	
-	passwdfile = fopen(passwdpath, "r");
+	file = fopen(path, "r");
+	free(path);
+	path = NULL;
 	cx->password = malloc(128);
 	*cx->password = 0;
-	fgets(cx->password, 128, passwdfile);
-	fclose(passwdfile);
+	fgets(cx->password, 128, file);
+	fclose(file);
 	rc = strlen(cx->password) - 1;
 	if(cx->password[rc] == '\n')
 		cx->password[rc] = 0;
@@ -84,9 +95,60 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 		krb5_set_error_message(cxin, EINVAL, "Must specify a password to connect to AD");
 		return rc;
 	}
+	
 	rc = get_creds(cx);
 	if(rc != 0)
 		return rc;
+	
+	if(buffer) {
+		cx->ldapretries = atoi(buffer);
+		free(buffer);
+	} else
+		cx->ldapretries = 3;
+	
+	config_string(cx->kcx, "adobjects", &path);
+	cx->dncount = 0;
+	if(!path) {
+		cx->updatefor = NULL;
+		return 0;
+	}
+	file = fopen(path, "r");
+	free(path);
+	if(file == NULL) {
+		rc = errno;
+		krb5_set_error_message(cxin, rc, "Cannot open AD objects file.");
+		cleanup(cxin, *modinfo);
+		return 0;
+	}
+	buffer = malloc(4096);
+	do {
+		memset(buffer, 0, 4096);
+		rc = fread(buffer, 4096, 1, file);
+		for(i = 0; buffer[i] != 0; i++) {
+			if(buffer[i] == '\n')
+				cx->dncount++;
+		}
+	} while(rc > 0);
+	
+	cx->updatefor = malloc(sizeof(struct dnokay) * cx->dncount);
+	memset(cx->updatefor, 0, sizeof(struct dnokay) * cx->dncount);
+	rewind(file);
+	i = 0;
+	while(fgets(buffer, 4096, file)) {
+		size_t bufLen = strlen(buffer);
+		int j;
+		if(buffer[bufLen - 1] == '\n') {
+			buffer[bufLen - 1] = 0;
+			bufLen--;
+		}
+		cx->updatefor[i].dn = strdup(buffer);
+		cx->updatefor[i].parts = 1;
+		for(j = 0; j < bufLen; j++) {
+			if(buffer[j] == ',')
+				cx->updatefor[i].parts++;
+		}
+	}
+	free(buffer);
 	
 	return 0;
 }

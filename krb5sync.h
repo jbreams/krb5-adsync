@@ -13,7 +13,9 @@ struct k5scfg {
 	char * ldapuri;
 	char * basedn;
 	char * password;
-	struct dnokay ** updatefor;
+	struct dnokay * updatefor;
+	unsigned int dncount;
+	int ldapretries;
 };
 
 krb5_principal get_ad_principal(struct k5scfg * cx, krb5_principal pin);
