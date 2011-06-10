@@ -29,7 +29,7 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
 	return LDAP_SUCCESS;
 }
 
-int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut) {
+int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDAP ** ldOut) {
 	char * tmp, *filter, * dn;
 	unsigned int gsserr;
 	int parts = 1, i, rc, option = LDAP_VERSION3;
@@ -40,29 +40,29 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut) {
 	
 	rc = get_creds(cx);
 	if(rc != 0) {
-		krb5_set_error_message(cx->kcx, rc, "Error getting credentials for LDAP bind");
-		return -1;
+		krb5_set_error_message(tc, rc, "Error getting credentials for LDAP bind");
+		return rc;
 	}
 	
 	rc = ldap_initialize(&ldConn, cx->ldapuri);
 	if(rc != 0) {
-		krb5_set_error_message(cx->kcx, rc, "Error initializing LDAP: %s",
+		krb5_set_error_message(tc, rc, "Error initializing LDAP: %s",
 							   ldap_err2string(rc));
-		return -1;
+		return rc;
 	}
 	
 	rc = ldap_set_option(ldConn, LDAP_OPT_PROTOCOL_VERSION, &option);
 	if(rc != 0) {
-		krb5_set_error_message(cx->kcx, rc, "Error setting protocol version: %s",
+		krb5_set_error_message(tc, rc, "Error setting protocol version: %s",
 							   ldap_err2string(rc));
-		return -1;
+		return rc;
 	}
 	
 	ldap_set_option(ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 	
 	if(gss_krb5_ccache_name(&gsserr, CACHE_NAME, &oldccname) != GSS_S_COMPLETE) {
-		krb5_set_error_message(cx->kcx, rc, "Error setting credentials cache.");
-		return -1;
+		krb5_set_error_message(tc, rc, "Error setting credentials cache.");
+		return rc;
 	}
 	
 	do {
@@ -72,9 +72,9 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut) {
 	
 	gss_krb5_ccache_name(&gsserr, oldccname, NULL);
 	if(rc != 0) {
-		krb5_set_error_message(cx->kcx, rc, "Error connecting to LDAP server: %s",
+		krb5_set_error_message(tc, rc, "Error connecting to LDAP server: %s",
 							   ldap_err2string(rc));
-		return -1;
+		return rc;
 	}
 	
 	filter = malloc(sizeof("(userPrincipalName=)") + strlen(principal) + 1);
@@ -86,9 +86,9 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut) {
 		ldap_unbind_ext_s(ldConn, NULL, NULL);
 		if(ldOut)
 			*ldOut = NULL;
-		krb5_set_error_message(cx->kcx, rc, "Error searching for %s: %s",
+		krb5_set_error_message(tc, rc, "Error searching for %s: %s",
 							   principal, ldap_err2string(rc));
-		return -1;
+		return rc;
 	}
 	
 	free(filter);
@@ -117,7 +117,7 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut) {
 		tmp = dn;
 		if(c < cx->updatefor[i].parts)
 			continue;
-		while(c > parts) {
+		while(c > cx->updatefor[i].parts) {
 			while(*tmp != ',') tmp++;
 			tmp++;
 			c--;

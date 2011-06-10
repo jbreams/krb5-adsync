@@ -13,6 +13,7 @@ struct k5scfg {
 	char * ldapuri;
 	char * basedn;
 	char * password;
+	krb5_keytab keytab;
 	struct dnokay * updatefor;
 	unsigned int dncount;
 	int ldapretries;
@@ -20,7 +21,7 @@ struct k5scfg {
 
 krb5_principal get_ad_principal(struct k5scfg * cx, krb5_principal pin);
 int get_creds(struct k5scfg * cx);
-int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut);
+int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDAP ** ldOut);
 
 kadm5_ret_t handle_modify(krb5_context kx, kadm5_hook_modinfo * modinfo,
 						  int stage, kadm5_principal_ent_t pin, long mask);

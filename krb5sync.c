@@ -36,6 +36,8 @@ void cleanup(krb5_context cxin, kadm5_hook_modinfo * modinfo) {
 		memset(cx->password, 0, 128);
 		free(cx->password);
 	}
+	if(cx->keytab)
+		krb5_kt_close(cx->kcx, cx->keytab);
 	if(cx->kcx)
 		krb5_free_context(cx->kcx);
 	if(cx->updatefor) {
@@ -53,12 +55,14 @@ void cleanup(krb5_context cxin, kadm5_hook_modinfo * modinfo) {
 
 kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 	struct k5scfg * cx = malloc(sizeof(struct k5scfg));
-	char * path = NULL, *buffer;
+	char * path = NULL, *buffer, *ktpath;
 	FILE * file = NULL;
 	int rc, i;
 	
 	if(cx == NULL)
 		return -ENOMEM;
+	
+	memset(cx, 0, sizeof(struct k5scfg));
 	
 	krb5_init_context(&cx->kcx);
 	*modinfo = (kadm5_hook_modinfo *)cx;
@@ -67,6 +71,7 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 	config_string(cx->kcx, "syncuser", &cx->ad_princ_unparsed);
 	config_string(cx->kcx, "password", &path);
 	config_string(cx->kcx, "ldapconnectretries", &buffer);
+	config_string(cx->kcx, "keytab", &ktpath);
 	if(!cx->basedn || !cx->ldapuri || !strlen(cx->ad_princ_unparsed)) {
 		cleanup(cxin, *modinfo);
 		krb5_set_error_message(cxin, EINVAL, "Must specify both basedn and ldapuri.");
@@ -80,22 +85,37 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 		return rc;
 	}
 	
-	file = fopen(path, "r");
-	free(path);
-	path = NULL;
-	cx->password = malloc(128);
-	*cx->password = 0;
-	fgets(cx->password, 128, file);
-	fclose(file);
-	rc = strlen(cx->password) - 1;
-	if(cx->password[rc] == '\n')
-		cx->password[rc] = 0;
-	if(!cx->password || strlen(cx->password) == 0) {
-		cleanup(cxin, *modinfo);
-		krb5_set_error_message(cxin, EINVAL, "Must specify a password to connect to AD");
-		return rc;
+	if(ktpath) {
+		rc = krb5_kt_resolve(cxin, ktpath, &cx->keytab);
+		free(ktpath);
+		if(rc != 0) {
+			krb5_set_error_message(cxin, rc, "Error opening keytab for AD user");
+			cleanup(cxin, *modinfo);
+			return rc;
+		}
+	} else if(path) {
+		file = fopen(path, "r");
+		free(path);
+		path = NULL;
+		cx->password = malloc(128);
+		*cx->password = 0;
+		fgets(cx->password, 128, file);
+		fclose(file);
+		rc = strlen(cx->password) - 1;
+		if(cx->password[rc] == '\n')
+			cx->password[rc] = 0;
+		if(!cx->password || strlen(cx->password) == 0) {
+			cleanup(cxin, *modinfo);
+			krb5_set_error_message(cxin, EINVAL, "Must specify a password to connect to AD");
+			return -EINVAL;
+		}
 	}
-	
+	else {
+		krb5_set_error_message(cxin, EINVAL, "Must specify either a password file or a keytab");
+		cleanup(cxin, *modinfo);
+		return -EINVAL;
+	}
+
 	rc = get_creds(cx);
 	if(rc != 0)
 		return rc;
@@ -149,6 +169,7 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 		}
 	}
 	free(buffer);
+	fclose(file);
 	
 	return 0;
 }
