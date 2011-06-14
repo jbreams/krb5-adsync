@@ -167,6 +167,7 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 			if(buffer[j] == ',')
 				cx->updatefor[i].parts++;
 		}
+		i++;
 	}
 	free(buffer);
 	fclose(file);

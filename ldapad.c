@@ -40,28 +40,28 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 	
 	rc = get_creds(cx);
 	if(rc != 0) {
-		krb5_set_error_message(tc, rc, "Error getting credentials for LDAP bind");
+		com_err("kadmind", rc, "Error getting credentials for LDAP bind");
 		return rc;
 	}
 	
 	rc = ldap_initialize(&ldConn, cx->ldapuri);
 	if(rc != 0) {
-		krb5_set_error_message(tc, rc, "Error initializing LDAP: %s",
-							   ldap_err2string(rc));
+		com_err("kadmind", rc, "Error initializing LDAP: %s",
+				ldap_err2string(rc));
 		return rc;
 	}
 	
 	rc = ldap_set_option(ldConn, LDAP_OPT_PROTOCOL_VERSION, &option);
 	if(rc != 0) {
-		krb5_set_error_message(tc, rc, "Error setting protocol version: %s",
-							   ldap_err2string(rc));
+		com_err("kadmind", rc, "Error setting protocol version: %s",
+				ldap_err2string(rc));
 		return rc;
 	}
 	
 	ldap_set_option(ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 	
 	if(gss_krb5_ccache_name(&gsserr, CACHE_NAME, &oldccname) != GSS_S_COMPLETE) {
-		krb5_set_error_message(tc, rc, "Error setting credentials cache.");
+		com_err("kadmind", rc,  "Error setting credentials cache.");
 		return rc;
 	}
 	
@@ -72,7 +72,7 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 	
 	gss_krb5_ccache_name(&gsserr, oldccname, NULL);
 	if(rc != 0) {
-		krb5_set_error_message(tc, rc, "Error connecting to LDAP server: %s",
+		com_err("kadmind", rc, "Error connecting to LDAP server: %s",
 							   ldap_err2string(rc));
 		return rc;
 	}
@@ -86,7 +86,7 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 		ldap_unbind_ext_s(ldConn, NULL, NULL);
 		if(ldOut)
 			*ldOut = NULL;
-		krb5_set_error_message(tc, rc, "Error searching for %s: %s",
+		com_err("kadmind", rc, "Error searching for %s: %s",
 							   principal, ldap_err2string(rc));
 		return rc;
 	}
