@@ -1,3 +1,20 @@
+/*
+ Copyright 2011 The Trustees of Columbia University
+ 
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+ 
+ http://www.apache.org/licenses/LICENSE-2.0
+ 
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ 
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ldap.h>
@@ -20,11 +37,11 @@ kadm5_ret_t handle_remove(krb5_context lkcx, kadm5_hook_modinfo * modinfo,
 	krb5_principal targetPrincipal = get_ad_principal(cx, lprinc);
 	char * targetUnparsed = NULL;
 	char * dn = NULL;
-	LDAP * ldConn;
+	LDAP * ldConn = NULL;
 	int rc;
 	
 	krb5_unparse_name(cx->kcx, targetPrincipal, &targetUnparsed);
-	rc = check_update_okay(cx->kcx, lkcx, targetUnparsed, &ldConn, &dn);
+	rc = check_update_okay(cx, lkcx, targetUnparsed, &ldConn, &dn);
 	if(rc != 1)
 		goto finished;
 	
@@ -38,8 +55,10 @@ kadm5_ret_t handle_remove(krb5_context lkcx, kadm5_hook_modinfo * modinfo,
 		do_disable(ldConn, dn, 1);
 	
 finished:
-	ldap_memfree(dn);
-	ldap_unbind_ext_s(ldConn, NULL, NULL);
+	if(dn)
+		ldap_memfree(dn);
+	if(ldConn)
+		ldap_unbind_ext_s(ldConn, NULL, NULL);
 	krb5_free_principal(cx->kcx, targetPrincipal);
 	krb5_free_unparsed_name(cx->kcx, targetUnparsed);
 	return 0;
@@ -100,3 +119,4 @@ void do_disable(LDAP * ldConn, char * dn, int disable) {
 				dn, newacctcontrol, ldap_err2string(rc));
 	}
 }
+

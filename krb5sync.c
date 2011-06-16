@@ -1,3 +1,20 @@
+/*
+ Copyright 2011 The Trustees of Columbia University
+ 
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+ 
+ http://www.apache.org/licenses/LICENSE-2.0
+ 
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ 
+ */
+
 #include <krb5/kadm5_hook_plugin.h>
 #include <stdio.h>
 #include <assert.h>
@@ -137,6 +154,9 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 		free(buffer);
 	}
 	
+	krb5_appdefault_boolean(cx->kcx, "krb5-sync", NULL, "syncdisable", 0, &cx->syncdisable);
+	krb5_appdefault_boolean(cx->kcx, "krb5-sync", NULL, "syncexpire", 0, &cx->syncexpire);
+	
 	config_string(cx->kcx, "adobjects", &path);
 	cx->dncount = 0;
 	if(!path) {
@@ -195,7 +215,7 @@ krb5_error_code kadm5_hook_krb5sync_initvt(krb5_context context, int maj_ver, in
 	
     vt->name = "krb5sync";
     vt->chpass = handle_chpass;
-//    vt->modify = handle_modify;
+    vt->modify = handle_modify;
 	vt->remove = handle_remove;
 	vt->init = handle_init;
 	vt->fini = cleanup;
