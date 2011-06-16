@@ -126,6 +126,17 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 	} else
 		cx->ldapretries = 3;
 	
+	config_string(cx->kcx, "ondelete", &buffer);
+	if(buffer) {
+		if(strcmp(buffer, "delete") == 0)
+			cx->ondelete = 1;
+		else if(strcmp(buffer, "disable") == 0)
+			cx->ondelete = 2;
+		else
+			cx->ondelete = 0;
+		free(buffer);
+	}
+	
 	config_string(cx->kcx, "adobjects", &path);
 	cx->dncount = 0;
 	if(!path) {
@@ -185,6 +196,7 @@ krb5_error_code kadm5_hook_krb5sync_initvt(krb5_context context, int maj_ver, in
     vt->name = "krb5sync";
     vt->chpass = handle_chpass;
 //    vt->modify = handle_modify;
+	vt->remove = handle_remove;
 	vt->init = handle_init;
 	vt->fini = cleanup;
     return 0;

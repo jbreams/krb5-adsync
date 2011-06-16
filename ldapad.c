@@ -29,7 +29,7 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
 	return LDAP_SUCCESS;
 }
 
-int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDAP ** ldOut) {
+int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDAP ** ldOut, char ** dnout) {
 	char * tmp, *filter, * dn;
 	unsigned int gsserr;
 	int parts = 1, i, rc, option = LDAP_VERSION3;
@@ -128,6 +128,9 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 			return 1;
 		}
 	}
-	ldap_memfree(dn);
+	if(dnout == NULL)
+		ldap_memfree(dn);
+	else
+		*dnout = dn;
 	return 0;
 }

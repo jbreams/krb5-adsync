@@ -88,7 +88,7 @@ kadm5_ret_t handle_chpass(krb5_context context,
 	
 	krb5_unparse_name(cx->kcx, targetPrincipal, &targetUnparsed);
 	
-	rc = check_update_okay(cx, context, targetUnparsed, NULL);
+	rc = check_update_okay(cx, context, targetUnparsed, NULL, NULL);
 	if(rc != 1)
 		goto finished;
 	
