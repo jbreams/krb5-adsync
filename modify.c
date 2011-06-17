@@ -71,7 +71,7 @@ kadm5_ret_t handle_modify(krb5_context kx, kadm5_hook_modinfo * modinfo,
 		rc = ldap_modify_ext_s(ldConn, dn, modarray, NULL, NULL);
 		if(rc != 0)
 			com_err("kadmind", rc, "Error setting expire time to %llu for %s: %s",
-					expireTime, dn, ldap_err2str(rc));
+					expireTime, dn, ldap_err2string(rc));
 	}
 	
 finished:
