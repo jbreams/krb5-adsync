@@ -47,6 +47,8 @@ void cleanup(krb5_context cxin, kadm5_hook_modinfo * modinfo) {
 		krb5_free_principal(cx->kcx, cx->ad_principal);
 	if(cx->ad_princ_unparsed)
 		free(cx->ad_princ_unparsed);
+	if(cx->binddn)
+		free(cx->binddn);
 	if(cx->kcx)
 		krb5_free_context(cx->kcx);
 	if(cx->password) {
@@ -87,6 +89,7 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 	config_string(cx->kcx, "ldapuri", &cx->ldapuri);
 	config_string(cx->kcx, "syncuser", &cx->ad_princ_unparsed);
 	config_string(cx->kcx, "password", &path);
+	config_string(cx->kcx, "binddn", &cx->binddn);
 	config_string(cx->kcx, "ldapconnectretries", &buffer);
 	config_string(cx->kcx, "keytab", &ktpath);
 	if(!cx->basedn || !cx->ldapuri || !strlen(cx->ad_princ_unparsed)) {

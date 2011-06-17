@@ -27,6 +27,7 @@ struct k5scfg {
 	krb5_principal ad_principal;
 	char * ad_princ_unparsed;
 	char * ldapuri;
+	char * binddn;
 	char * basedn;
 	char * password;
 	krb5_keytab keytab;

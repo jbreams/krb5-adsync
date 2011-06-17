@@ -55,10 +55,12 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 	char * noattrs[2] = { "1.1", NULL };
 	const char * oldccname;
 	
-	rc = get_creds(cx);
-	if(rc != 0) {
-		com_err("kadmind", rc, "Error getting credentials for LDAP bind");
-		return rc;
+	if(!cx->binddn) {
+		rc = get_creds(cx);
+		if(rc != 0) {
+			com_err("kadmind", rc, "Error getting credentials for LDAP bind");
+			return rc;
+		}
 	}
 	
 	rc = ldap_initialize(&ldConn, cx->ldapuri);
@@ -77,17 +79,24 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 	
 	ldap_set_option(ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 	
-	if(gss_krb5_ccache_name(&gsserr, CACHE_NAME, &oldccname) != GSS_S_COMPLETE) {
-		com_err("kadmind", rc,  "Error setting credentials cache.");
-		return rc;
+
+	if(!cx->binddn) {
+		if(gss_krb5_ccache_name(&gsserr, CACHE_NAME, &oldccname) != GSS_S_COMPLETE) {
+			com_err("kadmind", rc,  "Error setting credentials cache.");
+			return rc;
+		}
 	}
 	
 	do {
-		rc = ldap_sasl_interactive_bind_s(ldConn, NULL, "GSSAPI",
-			NULL, NULL, LDAP_SASL_QUIET, do_sasl_interact, NULL);
+		if(cx->binddn)
+			rc = ldap_simple_bind_s(ldConn, cx->binddn, cx->password);
+		else
+			rc = ldap_sasl_interactive_bind_s(ldConn, NULL, "GSSAPI",
+					NULL, NULL, LDAP_SASL_QUIET, do_sasl_interact, NULL);
 	} while(++i < cx->ldapretries && rc != 0);
 	
-	gss_krb5_ccache_name(&gsserr, oldccname, NULL);
+	if(!cx->binddn)
+		gss_krb5_ccache_name(&gsserr, oldccname, NULL);
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error connecting to LDAP server: %s",
 							   ldap_err2string(rc));
