@@ -127,11 +127,14 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 		*ldOut = ldConn;
 	else
 		ldap_unbind_ext_s(ldConn, NULL, NULL);
-	tmp = dn;
 	
-	if(cx->updatefor == NULL)
+	if(cx->updatefor == NULL) {
+		if(dnout)
+			*dnout = dn;
 		return 1;
+	}
 	
+	tmp = dn;
 	while (*tmp != 0) {
 		if(*tmp == ',')
 			parts++;
@@ -150,13 +153,13 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 		}
 		
 		if(strcmp(tmp, cx->updatefor[i].dn) == 0) {
-			ldap_memfree(dn);
+			if(dnout)
+				*dnout = dn;
+			else
+				ldap_memfree(dn);
 			return 1;
 		}
 	}
-	if(dnout == NULL)
-		ldap_memfree(dn);
-	else
-		*dnout = dn;
+	ldap_memfree(dn);
 	return 0;
 }

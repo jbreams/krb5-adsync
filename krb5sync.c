@@ -83,7 +83,12 @@ kadm5_ret_t handle_init(krb5_context cxin, kadm5_hook_modinfo ** modinfo) {
 	
 	memset(cx, 0, sizeof(struct k5scfg));
 	
-	krb5_init_context(&cx->kcx);
+	rc = krb5_init_context(&cx->kcx);
+	if(rc != 0) {
+		com_err("kadmind", rc, "Unable to initialize krb context for syncing.");
+		free(cx);
+		return rc;
+	}
 	*modinfo = (kadm5_hook_modinfo *)cx;
 	config_string(cx->kcx, "basedn", &cx->basedn);
 	config_string(cx->kcx, "ldapuri", &cx->ldapuri);
