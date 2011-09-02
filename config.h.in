@@ -6,8 +6,8 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Define to 1 if you have the <krb5/kadm5_hook_plugin> header file. */
-#undef HAVE_KRB5_KADM5_HOOK_PLUGIN
+/* Define to 1 if you have the <krb5/kadm5_hook_plugin.h> header file. */
+#undef HAVE_KRB5_KADM5_HOOK_PLUGIN_H
 
 /* Define to 1 if you have the <krb5/krb5.h> header file. */
 #undef HAVE_KRB5_KRB5_H
