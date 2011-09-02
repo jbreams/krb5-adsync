@@ -23,7 +23,7 @@
 #include <krb5/kadm5_hook_plugin.h>
 #include "krb5sync.h"
 
-kadm5_ret_t handle_modify(krb5_context kx, kadm5_hook_modinfo * modinfo,
+kadm5_ret_t handle_modify(krb5_context kcx, kadm5_hook_modinfo * modinfo,
 	int stage, kadm5_principal_ent_t pin, long mask) {
 	if(stage == KADM5_HOOK_STAGE_PRECOMMIT)
 		return 0;
@@ -32,14 +32,14 @@ kadm5_ret_t handle_modify(krb5_context kx, kadm5_hook_modinfo * modinfo,
 	if(!(cx->syncdisable || cx->syncexpire))
 		return 0;
 	
-	krb5_principal targetPrincipal = get_ad_principal(cx, pin->principal);
+	krb5_principal targetPrincipal = get_ad_principal(kcx, cx, pin->principal);
 	char * targetUnparsed = NULL;
 	char * dn = NULL;
 	LDAP * ldConn = NULL;
 	int rc;
 	
-	krb5_unparse_name(cx->kcx, targetPrincipal, &targetUnparsed);
-	rc = check_update_okay(cx, kx, targetUnparsed, &ldConn, &dn);
+	krb5_unparse_name(kcx, targetPrincipal, &targetUnparsed);
+	rc = check_update_okay(cx, targetUnparsed, &ldConn, &dn);
 	if(rc != 1)
 		goto finished;
 	
@@ -71,7 +71,7 @@ kadm5_ret_t handle_modify(krb5_context kx, kadm5_hook_modinfo * modinfo,
 		rc = ldap_modify_ext_s(ldConn, dn, modarray, NULL, NULL);
 		if(rc != 0)
 			com_err("kadmind", rc, "Error setting expire time to %llu for %s: %s",
-					expireTime, dn, ldap_err2string(rc));
+				expireTime, dn, ldap_err2string(rc));
 	}
 	
 finished:
@@ -79,7 +79,7 @@ finished:
 		ldap_memfree(dn);
 	if(ldConn)
 		ldap_unbind_ext_s(ldConn, NULL, NULL);
-	krb5_free_principal(cx->kcx, targetPrincipal);
-	krb5_free_unparsed_name(cx->kcx, targetUnparsed);
+	krb5_free_principal(kcx, targetPrincipal);
+	krb5_free_unparsed_name(kcx, targetUnparsed);
 	return 0;
 }

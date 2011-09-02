@@ -46,7 +46,7 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
 	return LDAP_SUCCESS;
 }
 
-int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDAP ** ldOut, char ** dnout) {
+int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout) {
 	char * tmp, *filter, * dn;
 	unsigned int gsserr;
 	int parts = 1, i, rc, option = LDAP_VERSION3;
@@ -66,14 +66,14 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 	rc = ldap_initialize(&ldConn, cx->ldapuri);
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error initializing LDAP: %s",
-				ldap_err2string(rc));
+			ldap_err2string(rc));
 		return rc;
 	}
 	
 	rc = ldap_set_option(ldConn, LDAP_OPT_PROTOCOL_VERSION, &option);
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error setting protocol version: %s",
-				ldap_err2string(rc));
+			ldap_err2string(rc));
 		return rc;
 	}
 	
@@ -92,14 +92,14 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 			rc = ldap_simple_bind_s(ldConn, cx->binddn, cx->password);
 		else
 			rc = ldap_sasl_interactive_bind_s(ldConn, NULL, "GSSAPI",
-					NULL, NULL, LDAP_SASL_QUIET, do_sasl_interact, NULL);
+				NULL, NULL, LDAP_SASL_QUIET, do_sasl_interact, NULL);
 	} while(++i < cx->ldapretries && rc != 0);
 	
 	if(!cx->binddn)
 		gss_krb5_ccache_name(&gsserr, oldccname, NULL);
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error connecting to LDAP server: %s",
-							   ldap_err2string(rc));
+			ldap_err2string(rc));
 		return rc;
 	}
 	
@@ -107,13 +107,13 @@ int check_update_okay(struct k5scfg * cx, krb5_context tc, char * principal, LDA
 	sprintf(filter, "(userPrincipalName=%s)", principal);
 	
 	rc = ldap_search_ext_s(ldConn, cx->basedn, LDAP_SCOPE_SUBTREE, filter,
-			   noattrs, 0, NULL, NULL, NULL, 0, &msg);
+		noattrs, 0, NULL, NULL, NULL, 0, &msg);
 	if(rc != 0) {
 		ldap_unbind_ext_s(ldConn, NULL, NULL);
 		if(ldOut)
 			*ldOut = NULL;
 		com_err("kadmind", rc, "Error searching for %s: %s",
-							   principal, ldap_err2string(rc));
+			principal, ldap_err2string(rc));
 		return rc;
 	}
 	

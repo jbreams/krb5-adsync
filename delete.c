@@ -26,7 +26,7 @@
 /* The flag value used in Active Directory to indicate a disabled account. */
 #define UF_ACCOUNTDISABLE 0x02
 
-kadm5_ret_t handle_remove(krb5_context lkcx, kadm5_hook_modinfo * modinfo,
+kadm5_ret_t handle_remove(krb5_context kcx, kadm5_hook_modinfo * modinfo,
 						  int stage, krb5_principal lprinc) {
 	if(stage == KADM5_HOOK_STAGE_PRECOMMIT)
 		return 0;
@@ -34,14 +34,14 @@ kadm5_ret_t handle_remove(krb5_context lkcx, kadm5_hook_modinfo * modinfo,
 	if(cx->ondelete == 0)
 		return 0;
 	
-	krb5_principal targetPrincipal = get_ad_principal(cx, lprinc);
+	krb5_principal targetPrincipal = get_ad_principal(kcx, cx, lprinc);
 	char * targetUnparsed = NULL;
 	char * dn = NULL;
 	LDAP * ldConn = NULL;
 	int rc;
 	
-	krb5_unparse_name(cx->kcx, targetPrincipal, &targetUnparsed);
-	rc = check_update_okay(cx, lkcx, targetUnparsed, &ldConn, &dn);
+	krb5_unparse_name(kcx, targetPrincipal, &targetUnparsed);
+	rc = check_update_okay(cx, targetUnparsed, &ldConn, &dn);
 	if(rc != 1)
 		goto finished;
 	
@@ -49,7 +49,7 @@ kadm5_ret_t handle_remove(krb5_context lkcx, kadm5_hook_modinfo * modinfo,
 		rc = ldap_delete_s(ldConn, dn);
 		if(rc != 0)
 			com_err("kadmind", rc, "Error deleting %s: %s",
-					targetUnparsed, ldap_err2string(rc));
+				targetUnparsed, ldap_err2string(rc));
 	}
 	else
 		do_disable(ldConn, dn, 1);
@@ -59,8 +59,8 @@ finished:
 		ldap_memfree(dn);
 	if(ldConn)
 		ldap_unbind_ext_s(ldConn, NULL, NULL);
-	krb5_free_principal(cx->kcx, targetPrincipal);
-	krb5_free_unparsed_name(cx->kcx, targetUnparsed);
+	krb5_free_principal(kcx, targetPrincipal);
+	krb5_free_unparsed_name(kcx, targetUnparsed);
 	return 0;
 }
 
@@ -78,7 +78,7 @@ void do_disable(LDAP * ldConn, char * dn, int disable) {
 	
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error getting userAccountControl for %s: %s",
-				dn, ldap_err2string(rc));
+			dn, ldap_err2string(rc));
 		return;
 	}
 	
@@ -116,7 +116,7 @@ void do_disable(LDAP * ldConn, char * dn, int disable) {
 	rc = ldap_modify_ext_s(ldConn, dn, modarray, NULL, NULL);
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error modifying %s with new UAC %x: %s",
-				dn, newacctcontrol, ldap_err2string(rc));
+			dn, newacctcontrol, ldap_err2string(rc));
 	}
 }
 

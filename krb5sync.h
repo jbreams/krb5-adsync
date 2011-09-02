@@ -23,7 +23,6 @@ struct dnokay {
 };
 
 struct k5scfg {
-	krb5_context kcx;
 	krb5_principal ad_principal;
 	char * ad_princ_unparsed;
 	char * ldapuri;
@@ -39,10 +38,8 @@ struct k5scfg {
 	short syncexpire;
 };
 
-krb5_principal get_ad_principal(struct k5scfg * cx, krb5_principal pin);
-int get_creds(struct k5scfg * cx);
-int check_update_okay(struct k5scfg * cx, krb5_context tc, 
-	char * principal, LDAP ** ldOut, char ** dnout);
+krb5_principal get_ad_principal(krb5_context kcx, struct k5scfg * cx, krb5_principal pin);
+int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout);
 void do_disable(LDAP * ldConn, char * dn, int disable);
 
 kadm5_ret_t handle_modify(krb5_context kx, kadm5_hook_modinfo * modinfo,
