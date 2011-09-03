@@ -29,6 +29,7 @@ struct k5scfg {
 	char * binddn;
 	char * basedn;
 	char * password;
+	char * adobjects;
 	krb5_keytab keytab;
 	struct dnokay * updatefor;
 	unsigned int dncount;

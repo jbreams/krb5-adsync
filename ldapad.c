@@ -47,13 +47,14 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
 }
 
 int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout) {
-	char * tmp, *filter, * dn;
+	char * tmp, *filter, * dn, *dntocheck = NULL;
 	unsigned int gsserr;
 	int parts = 1, i, rc, option = LDAP_VERSION3;
 	LDAP * ldConn = NULL;
 	LDAPMessage * msg = NULL;
 	char * noattrs[2] = { "1.1", NULL };
 	const char * oldccname;
+	FILE * adobjects = NULL;
 	
 	if(!cx->binddn) {
 		rc = get_creds(cx);
@@ -128,38 +129,82 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 	else
 		ldap_unbind_ext_s(ldConn, NULL, NULL);
 	
-	if(cx->updatefor == NULL) {
+	if(cx->updatefor == NULL && !cx->adobjects) {
 		if(dnout)
 			*dnout = dn;
+		else
+			ldap_memfree(dn);
 		return 1;
 	}
+	else if(cx->updatefor && cx->dncount) {
+		i = 0;
+		dntocheck = cx->updatefor[i].dn;
+	}
+	else if(cx->adobjects) {
+		adobjects = fopen(cx->adobjects, "r");
+		if(adobjects == NULL) {
+			rc = ernno;
+			com_err("kadmind", rc, "Error opening objects file: %s (%s)",
+				strerror(rc), cx->adobjects);
+			ldap_memfree(dn);
+			return 0;
+		}
+		dntocheck = malloc(4096);
+		dntocheck = fgets(dntocheck, 4096, adobjects);
+	}
 	
+	rc = 0;
 	tmp = dn;
 	while (*tmp != 0) {
 		if(*tmp == ',')
 			parts++;
 		tmp++;
 	}
-	
-	for(i = 0; i < cx->dncount; i++) {
-		int c = parts;
-		tmp = dn;
-		if(c < cx->updatefor[i].parts)
+
+	do {
+		int cp, c;
+		if(adobjects) {
+			char * tmp2 = dntocheck;
+			while(*tmp2 != 0) {
+				if(*tmp2 == ',')
+					cp++;
+				tmp2++;
+			}
+		} else
+			cp = cx->updatefor[i].parts;
+
+		if(c < cp)
 			continue;
-		while(c > cx->updatefor[i].parts) {
+		tmp = dn;
+		while(c > cp) {
 			while(*tmp != ',') tmp++;
 			tmp++;
 			c--;
 		}
-		
-		if(strcmp(tmp, cx->updatefor[i].dn) == 0) {
-			if(dnout)
-				*dnout = dn;
-			else
-				ldap_memfree(dn);
-			return 1;
+
+		if(strcmp(tmp, dntocheck) == 0) {
+			rc = 1;
+			break;
 		}
+
+		if(adobjects)
+			dntocheck = fgets(dntocheck, 4096, adobjects);
+		else {
+			if(++i > cx->dncount)
+				dntocheck = NULL;
+			else
+				dntocheck = cx->updatefor[i].dn;
+		}
+	} while(dntocheck);
+	
+	if(dnout)
+		*dnout = dn;
+	else
+		ldap_memfree(dn);
+	if(adobjects) {
+		fclose(adobjects);
+		free(dntocheck);
 	}
-	ldap_memfree(dn);
-	return 0;
+
+	return rc; 
 }

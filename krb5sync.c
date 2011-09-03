@@ -153,6 +153,7 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 	
 	krb5_appdefault_boolean(kcx, "krb5-sync", NULL, "syncdisable", 0, &cx->syncdisable);
 	krb5_appdefault_boolean(kcx, "krb5-sync", NULL, "syncexpire", 0, &cx->syncexpire);
+	krb5_appdefault_boolean(kcx, "krb5-sync", NULL, "liveadobjects", 0, &rc);
 	
 	config_string(kcx, "adobjects", &path);
 	cx->dncount = 0;
@@ -160,6 +161,12 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 		cx->updatefor = NULL;
 		return 0;
 	}
+	if(rc) {
+		cx->updatefor = NULL;
+		cx->adobjects = path;
+		return 0;
+	}
+
 	file = fopen(path, "r");
 	free(path);
 	if(file == NULL) {
