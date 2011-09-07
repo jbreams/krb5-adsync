@@ -32,6 +32,13 @@ AC_ARG_ENABLE([debuginfo], [Enables debugging info for binaries.]
 	CFLAGS="-g $KRB5_CFLAGS",
 	CFLAGS="$CFLAGS $KRB5_CFLAGS")
 
+AC_ARG_ENABLE([modify-hook], [Enables hooking on modify calls.]
+	[AC_DEFINE([ENABLE_MODIFY_HOOK])], [])
+AC_ARG_ENABLE([delete-hook], [Enables hooking on delete calls.]
+	[AC_DEFINE([ENABLE_DELETE_HOOK])], [])
+AC_ARG_ENABLE([sasl-gssapi], [Enables SASL-GSSAPI authentication to LDAP],
+	[AC_DEFINE([ENABLE_SASL_GSSAPI])], [])
+
 AC_CHECK_LIB([ldap], [ldap_sasl_interactive_bind_s])
 AC_CHECK_LIB([ldap], [ldap_search_ext_s])
 AC_CHECK_LIB([krb5], [krb5_get_init_creds_password])

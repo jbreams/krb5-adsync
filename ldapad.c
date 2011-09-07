@@ -48,13 +48,16 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
 
 int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout) {
 	char * tmp, *filter, * dn;
+#ifdef ENABLE_SASL_GSSAPI
 	unsigned int gsserr;
+	const char * oldccname;
+#endif
 	int parts = 1, i = 0, rc, option = LDAP_VERSION3;
 	LDAP * ldConn = NULL;
 	LDAPMessage * msg = NULL;
 	char * noattrs[2] = { "1.1", NULL };
-	const char * oldccname;
-	
+		
+#ifdef ENABLE_SASL_GSSAPI
 	if(!cx->binddn) {
 		rc = get_creds(cx);
 		if(rc != 0) {
@@ -62,6 +65,7 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 			return rc;
 		}
 	}
+#endif
 	
 	rc = ldap_initialize(&ldConn, cx->ldapuri);
 	if(rc != 0) {
@@ -79,24 +83,32 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 	
 	ldap_set_option(ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 	
-
+#ifdef ENABLE_SASL_GSSAPI
 	if(!cx->binddn) {
 		if(gss_krb5_ccache_name(&gsserr, CACHE_NAME, &oldccname) != GSS_S_COMPLETE) {
 			com_err("kadmind", rc,  "Error setting credentials cache.");
 			return rc;
 		}
 	}
+#endif
+
 	
 	do {
+#ifdef ENABLE_SASL_GSSAPI
 		if(cx->binddn)
+#endif
 			rc = ldap_simple_bind_s(ldConn, cx->binddn, cx->password);
+#ifdef ENABLE_SASL_GSSAPI
 		else
 			rc = ldap_sasl_interactive_bind_s(ldConn, NULL, "GSSAPI",
 				NULL, NULL, LDAP_SASL_QUIET, do_sasl_interact, NULL);
+#endif
 	} while(++i < cx->ldapretries && rc != 0);
 	
+#ifdef ENABLE_SASL_GSSAPI
 	if(!cx->binddn)
 		gss_krb5_ccache_name(&gsserr, oldccname, NULL);
+#endif
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error connecting to LDAP server: %s",
 			ldap_err2string(rc));

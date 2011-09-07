@@ -26,6 +26,8 @@
 /* The flag value used in Active Directory to indicate a disabled account. */
 #define UF_ACCOUNTDISABLE 0x02
 
+#ifdef ENABLE_DELETE_HOOK
+
 kadm5_ret_t handle_remove(krb5_context kcx, kadm5_hook_modinfo * modinfo,
 						  int stage, krb5_principal lprinc) {
 	if(stage == KADM5_HOOK_STAGE_PRECOMMIT)
@@ -64,6 +66,9 @@ finished:
 	return 0;
 }
 
+#endif
+#if defined(ENABLE_DELETE_HOOK) || defined(ENABLE_MODIFY_HOOK)
+
 void do_disable(LDAP * ldConn, char * dn, int disable) {
 	LDAPMessage * res = NULL;
 	LDAPMod mod, *modarray[2];
@@ -74,7 +79,7 @@ void do_disable(LDAP * ldConn, char * dn, int disable) {
 	int rc;
 	
 	rc = ldap_search_ext_s(ldConn, dn, LDAP_SCOPE_BASE, "(objectClass=*)",
-						   (char**)attrs, 0, NULL, NULL, NULL, 0, &res);
+		(char**)attrs, 0, NULL, NULL, NULL, 0, &res);
 	
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error getting userAccountControl for %s: %s",
@@ -119,4 +124,5 @@ void do_disable(LDAP * ldConn, char * dn, int disable) {
 			dn, newacctcontrol, ldap_err2string(rc));
 	}
 }
+#endif
 

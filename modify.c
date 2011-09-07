@@ -15,6 +15,8 @@
  
  */
 
+#ifdef ENABLE_MODIFY_HOOK
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ldap.h>
@@ -25,7 +27,8 @@
 
 kadm5_ret_t handle_modify(krb5_context kcx, kadm5_hook_modinfo * modinfo,
 	int stage, kadm5_principal_ent_t pin, long mask) {
-	if(stage == KADM5_HOOK_STAGE_PRECOMMIT)
+
+	if(stage == KADM5_HOOK_STAGE_POSTCOMMIT)
 		return 0;
 	
 	struct k5scfg * cx = (struct k5scfg*)modinfo;
@@ -83,3 +86,5 @@ finished:
 	krb5_free_unparsed_name(kcx, targetUnparsed);
 	return 0;
 }
+
+#endif
