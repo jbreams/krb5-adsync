@@ -49,7 +49,7 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
 int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout) {
 	char * tmp, *filter, * dn;
 	unsigned int gsserr;
-	int parts = 1, i, rc, option = LDAP_VERSION3;
+	int parts = 1, i = 0, rc, option = LDAP_VERSION3;
 	LDAP * ldConn = NULL;
 	LDAPMessage * msg = NULL;
 	char * noattrs[2] = { "1.1", NULL };
