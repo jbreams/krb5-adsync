@@ -119,7 +119,7 @@ LDAP * get_ldap_conn(struct k5scfg * cx) {
 }
 
 int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout) {
-	char * tmp, *filter, * dn, *dntocheck = NULL;
+	char * tmp, *filter, * dn;
 	int parts = 1, i = 0, rc, cp;
 	LDAP * ldConn = get_ldap_conn(cx);
 	LDAPMessage * msg = NULL;
@@ -141,7 +141,6 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 	}
 	free(filter);
 	if(rc != 0) {
-		ldap_unbind_ext_s(ldConn, NULL, NULL);
 		if(ldOut)
 			*ldOut = NULL;
 		com_err("kadmind", rc, "Error searching for %s: %s",
@@ -156,8 +155,6 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 	ldap_msgfree(msg);
 	if(ldOut)
 		*ldOut = ldConn;
-	else
-		ldap_unbind_ext_s(ldConn, NULL, NULL);
 	
 	if(cx->updatefor == NULL && !cx->adobjects) {
 		if(dnout)
@@ -168,7 +165,7 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 	}
 	else if(cx->updatefor && cx->dncount) {
 		i = 0;
-		dntocheck = cx->updatefor[i].dn;
+		curdn = &cx->updatefor[i];
 	}
 	else if(cx->adobjects) {
 		adobjects = fopen(cx->adobjects, "r");
@@ -194,19 +191,19 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 	while (*tmp != 0) {
 		if(*tmp == ',')
 			parts++;
+		else
+			*tmp = tolower(*tmp);
 		tmp++;
 	}
 
 	do {
 		int c = parts;
 		if(c < curdn->parts)
-			continue;
+			goto next_obj;
 		tmp = dn;
 		while(c > curdn->parts) {
-			while(*tmp != ',') {
-				*tmp = tolower(*tmp);
+			while(*tmp != ',') 
 				tmp++;
-			}
 			tmp++;
 			c--;
 		}
@@ -216,8 +213,10 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 			break;
 		}
 
+next_obj:
 		if(adobjects) {
-			c = get_next_dn(&curdn, adobjects);
+			free(curdn->dn);
+			c = get_next_dn(curdn, adobjects);
 			if(c != 0) {
 				com_err("kadmind", rc, "Error reading DN from objects file: %s (%s)",
 					strerror(rc), cx->adobjects);
@@ -235,7 +234,7 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 		ldap_memfree(dn);
 	if(adobjects) {
 		fclose(adobjects);
-		free(dntocheck);
+		free(curdn);
 	}
 
 	return rc; 

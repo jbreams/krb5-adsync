@@ -80,8 +80,6 @@ kadm5_ret_t handle_modify(krb5_context kcx, kadm5_hook_modinfo * modinfo,
 finished:
 	if(dn)
 		ldap_memfree(dn);
-	if(ldConn)
-		ldap_unbind_ext_s(ldConn, NULL, NULL);
 	krb5_free_principal(kcx, targetPrincipal);
 	krb5_free_unparsed_name(kcx, targetUnparsed);
 	return 0;

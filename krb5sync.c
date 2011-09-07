@@ -64,6 +64,8 @@ void cleanup(krb5_context kcx, kadm5_hook_modinfo * modinfo) {
 		}
 		free(cx->updatefor);
 	}
+	if(cx->ldConn)
+		ldap_unbind_s(cx->ldConn);
 	if(cx)
 		free(cx);
 }
@@ -81,7 +83,7 @@ int get_next_dn(struct dnokay * out, FILE * in) {
 		return 0;
 	}
 
-	len = strlen(out->dn);
+	len = strlen(buffer);
 	if(len < 3) { // Minimum length of a valid DN (o=o)
 		free(buffer);
 		return -EINVAL;
