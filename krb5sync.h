@@ -15,6 +15,7 @@
  
  */
 
+#include "config.h"
 #define CACHE_NAME "MEMORY:krb5_sync"
 
 struct dnokay {
