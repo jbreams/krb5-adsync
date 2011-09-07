@@ -155,7 +155,7 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 	ldap_msgfree(msg);
 	if(ldOut)
 		*ldOut = ldConn;
-	
+
 	if(cx->updatefor == NULL && !cx->adobjects) {
 		if(dnout)
 			*dnout = dn;
