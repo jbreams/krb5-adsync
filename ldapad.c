@@ -20,9 +20,11 @@
 #include <string.h>
 #include <ldap.h>
 #include <krb5/kadm5_hook_plugin.h>
+#include <errno.h>
+#include "krb5sync.h"
+#ifdef ENABLE_SASL_GSSAPI
 #include <sasl/sasl.h>
 #include <gssapi/gssapi_krb5.h>
-#include "krb5sync.h"
 
 static int
 do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
@@ -45,19 +47,36 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
     }
 	return LDAP_SUCCESS;
 }
+#endif
 
-int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout) {
-	char * tmp, *filter, * dn, *dntocheck = NULL;
+LDAP * get_ldap_conn(struct k5scfg * cx) {
+	int rc, option = LDAP_VERSION3, i = 0;
+	LDAP * ldConn;
 #ifdef ENABLE_SASL_GSSAPI
 	unsigned int gsserr;
 	const char * oldccname;
 #endif
-	int parts = 1, i = 0, rc, option = LDAP_VERSION3;
-	LDAP * ldConn = NULL;
-	LDAPMessage * msg = NULL;
-	char * noattrs[2] = { "1.1", NULL };
-	FILE * adobjects = NULL;
-		
+
+	if(cx->ldConn)
+			return cx->ldConn;
+
+	cx->ldConn = NULL;
+	rc = ldap_initialize(&ldConn, cx->ldapuri);
+	if(rc != 0) {
+		com_err("kadmind", rc, "Error initializing LDAP: %s",
+			ldap_err2string(rc));
+		return NULL;
+	}
+	
+	rc = ldap_set_option(ldConn, LDAP_OPT_PROTOCOL_VERSION, &option);
+	if(rc != 0) {
+		com_err("kadmind", rc, "Error setting protocol version: %s",
+			ldap_err2string(rc));
+		return NULL;
+	}
+	
+	ldap_set_option(ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
+	
 #ifdef ENABLE_SASL_GSSAPI
 	if(!cx->binddn) {
 		rc = get_creds(cx);
@@ -65,35 +84,14 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 			com_err("kadmind", rc, "Error getting credentials for LDAP bind");
 			return rc;
 		}
-	}
-#endif
-	
-	rc = ldap_initialize(&ldConn, cx->ldapuri);
-	if(rc != 0) {
-		com_err("kadmind", rc, "Error initializing LDAP: %s",
-			ldap_err2string(rc));
-		return rc;
-	}
-	
-	rc = ldap_set_option(ldConn, LDAP_OPT_PROTOCOL_VERSION, &option);
-	if(rc != 0) {
-		com_err("kadmind", rc, "Error setting protocol version: %s",
-			ldap_err2string(rc));
-		return rc;
-	}
-	
-	ldap_set_option(ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
-	
-#ifdef ENABLE_SASL_GSSAPI
-	if(!cx->binddn) {
+
 		if(gss_krb5_ccache_name(&gsserr, CACHE_NAME, &oldccname) != GSS_S_COMPLETE) {
 			com_err("kadmind", rc,  "Error setting credentials cache.");
-			return rc;
+			return NULL;
 		}
 	}
 #endif
 
-	
 	do {
 #ifdef ENABLE_SASL_GSSAPI
 		if(cx->binddn)
@@ -113,14 +111,35 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error connecting to LDAP server: %s",
 			ldap_err2string(rc));
-		return rc;
+		return NULL;
 	}
 	
+	cx->ldConn = ldConn;
+	return ldConn;
+}
+
+int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout) {
+	char * tmp, *filter, * dn, *dntocheck = NULL;
+	int parts = 1, i = 0, rc, cp;
+	LDAP * ldConn = get_ldap_conn(cx);
+	LDAPMessage * msg = NULL;
+	char * noattrs[2] = { "1.1", NULL };
+	FILE * adobjects = NULL;
+	struct dnokay * curdn;
+			
 	filter = malloc(sizeof("(userPrincipalName=)") + strlen(principal) + 1);
 	sprintf(filter, "(userPrincipalName=%s)", principal);
-	
 	rc = ldap_search_ext_s(ldConn, cx->basedn, LDAP_SCOPE_SUBTREE, filter,
 		noattrs, 0, NULL, NULL, NULL, 0, &msg);
+
+	if(rc == LDAP_SERVER_DOWN || rc == LDAP_TIMELIMIT_EXCEEDED) {
+		ldOut = get_ldap_conn(cx);
+		if(ldOut == NULL)
+			return -1;
+		rc = ldap_search_ext_s(ldConn, cx->basedn, LDAP_SCOPE_SUBTREE, filter,
+			noattrs, 0, NULL, NULL, NULL, 0, &msg);
+	}
+	free(filter);
 	if(rc != 0) {
 		ldap_unbind_ext_s(ldConn, NULL, NULL);
 		if(ldOut)
@@ -130,7 +149,6 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 		return rc;
 	}
 	
-	free(filter);
 	if(ldap_count_entries(ldConn, msg) == 0)
 		return 0;
 	msg = ldap_first_entry(ldConn, msg);
@@ -155,14 +173,20 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 	else if(cx->adobjects) {
 		adobjects = fopen(cx->adobjects, "r");
 		if(adobjects == NULL) {
-			rc = ernno;
+			rc = errno;
 			com_err("kadmind", rc, "Error opening objects file: %s (%s)",
 				strerror(rc), cx->adobjects);
 			ldap_memfree(dn);
 			return 0;
 		}
-		dntocheck = malloc(4096);
-		dntocheck = fgets(dntocheck, 4096, adobjects);
+		curdn = malloc(sizeof(struct dnokay));
+		rc = get_next_dn(curdn, adobjects);
+		if(rc != 0) {
+			com_err("kadmind", rc, "Error reading DN from objects file: %s (%s)",
+				strerror(rc), cx->adobjects);
+			ldap_memfree(dn);
+			return 0;
+		}
 	}
 	
 	rc = 0;
@@ -174,40 +198,36 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 	}
 
 	do {
-		int cp, c;
-		if(adobjects) {
-			char * tmp2 = dntocheck;
-			while(*tmp2 != 0) {
-				if(*tmp2 == ',')
-					cp++;
-				tmp2++;
-			}
-		} else
-			cp = cx->updatefor[i].parts;
-
-		if(c < cp)
+		int c = parts;
+		if(c < curdn->parts)
 			continue;
 		tmp = dn;
-		while(c > cp) {
-			while(*tmp != ',') tmp++;
+		while(c > curdn->parts) {
+			while(*tmp != ',') {
+				*tmp = tolower(*tmp);
+				tmp++;
+			}
 			tmp++;
 			c--;
 		}
 
-		if(strcmp(tmp, dntocheck) == 0) {
+		if(strcmp(tmp, curdn->dn) == 0) {
 			rc = 1;
 			break;
 		}
 
-		if(adobjects)
-			dntocheck = fgets(dntocheck, 4096, adobjects);
-		else {
-			if(++i > cx->dncount)
-				dntocheck = NULL;
-			else
-				dntocheck = cx->updatefor[i].dn;
+		if(adobjects) {
+			c = get_next_dn(&curdn, adobjects);
+			if(c != 0) {
+				com_err("kadmind", rc, "Error reading DN from objects file: %s (%s)",
+					strerror(rc), cx->adobjects);
+				ldap_memfree(dn);
+				return 0;
+			}
 		}
-	} while(dntocheck);
+		else
+			curdn = &cx->updatefor[++i];
+	} while(curdn->dn);
 	
 	if(dnout)
 		*dnout = dn;

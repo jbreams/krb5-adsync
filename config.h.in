@@ -1,5 +1,14 @@
 /* config.h.in.  Generated from configure.in by autoheader.  */
 
+/* Enables the delete hook code */
+#undef ENABLE_DELETE_HOOK
+
+/* Enables the modify hook code */
+#undef ENABLE_MODIFY_HOOK
+
+/* Enabled ldap_sasl_interactive_bind_s */
+#undef ENABLE_SASL_GSSAPI
+
 /* Define to 1 if you have the <gssapi/gssapi_krb5.h> header file. */
 #undef HAVE_GSSAPI_GSSAPI_KRB5_H
 

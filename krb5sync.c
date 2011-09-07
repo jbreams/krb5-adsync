@@ -52,8 +52,10 @@ void cleanup(krb5_context kcx, kadm5_hook_modinfo * modinfo) {
 		memset(cx->password, 0, 128);
 		free(cx->password);
 	}
+#ifdef ENABLE_SASL_GSSAPI
 	if(cx->keytab)
 		krb5_kt_close(kcx, cx->keytab);
+#endif
 	if(cx->updatefor) {
 		int i;
 		for(i = 0; i < cx->dncount; i++) {
@@ -66,6 +68,44 @@ void cleanup(krb5_context kcx, kadm5_hook_modinfo * modinfo) {
 		free(cx);
 }
 
+int get_next_dn(struct dnokay * out, FILE * in) {
+	char * buffer = malloc(4096);
+	size_t len, i = 0, valid = 0;
+	if(!fgets(buffer, 4096, in)) {
+		free(buffer);
+		return errno;
+	}
+	if(feof(in)) {
+		free(buffer);
+		out->dn = NULL;
+		return 0;
+	}
+
+	len = strlen(out->dn);
+	if(len < 3) { // Minimum length of a valid DN (o=o)
+		free(buffer);
+		return -EINVAL;
+	}
+	out->dn = buffer;
+	out->parts = 1;
+	do {
+		if(out->dn[i] == '\n')
+			out->dn[i] = 0;
+		else if(out->dn[i] == ',')
+			out->parts++;
+		else if(out->dn[i] == '=')
+			valid = 1;
+		else
+			out->dn[i] = tolower(out->dn[i]);
+	} while(out->dn[++i] != 0);
+
+	if(!valid) {
+		free(out->dn);
+		return -EINVAL;
+	}
+	
+	return 0;
+}
 
 kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 	struct k5scfg * cx = malloc(sizeof(struct k5scfg));
@@ -85,7 +125,9 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 	config_string(kcx, "password", &path);
 	config_string(kcx, "binddn", &cx->binddn);
 	config_string(kcx, "ldapconnectretries", &buffer);
+#ifdef ENABLE_SASL_GSSAPI
 	config_string(kcx, "keytab", &ktpath);
+#endif
 	if(!cx->basedn || !cx->ldapuri || !strlen(cx->ad_princ_unparsed)) {
 		cleanup(kcx, *modinfo);
 		com_err("kadmind", KADM5_MISSING_CONF_PARAMS, "Must specify both basedn and ldapuri.");
@@ -99,6 +141,7 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 		return rc;
 	}
 	
+#ifdef ENABLE_SASL_GSSAPI
 	if(ktpath) {
 		rc = krb5_kt_resolve(kcx, ktpath, &cx->keytab);
 		free(ktpath);
@@ -108,6 +151,9 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 			return rc;
 		}
 	} else if(path) {
+#else
+	if(path) {
+#endif
 		file = fopen(path, "r");
 		free(path);
 		path = NULL;
@@ -184,29 +230,21 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 				cx->dncount++;
 		}
 	} while(rc > 0);
+	free(buffer);
 	
-	cx->updatefor = malloc(sizeof(struct dnokay) * cx->dncount);
-	memset(cx->updatefor, 0, sizeof(struct dnokay) * cx->dncount);
+	cx->updatefor = malloc(sizeof(struct dnokay) * (cx->dncount + 1));
 	rewind(file);
 	i = 0;
-	while(fgets(buffer, 4096, file)) {
-		size_t bufLen = strlen(buffer);
-		int j;
-		if(buffer[bufLen - 1] == '\n') {
-			buffer[bufLen - 1] = 0;
-			bufLen--;
-		}
-		cx->updatefor[i].dn = strdup(buffer);
-		cx->updatefor[i].parts = 1;
-		for(j = 0; j < bufLen; j++) {
-			if(buffer[j] == ',')
-				cx->updatefor[i].parts++;
-		}
+	while((rc = get_next_dn(&cx->updatefor[i], file)) == 0 && cx->updatefor[i].dn)
 		i++;
-	}
-	free(buffer);
 	fclose(file);
-	
+
+	if(rc != 0) {
+		com_err("kadmind", rc, "Error reading DN objects file: %s",
+			strerror(rc));
+		cleanup(kcx, *modinfo);
+		return KADM5_MISSING_CONF_PARAMS;
+	}
 	return 0;
 }
 
@@ -219,8 +257,12 @@ krb5_error_code kadm5_hook_krb5sync_initvt(krb5_context kcx, int maj_ver, int mi
 	
     vt->name = "krb5sync";
     vt->chpass = handle_chpass;
+#ifdef ENABLE_MODIFY_HOOK
     vt->modify = handle_modify;
+#endif
+#ifdef ENABLE_DELETE_HOOK
 	vt->remove = handle_remove;
+#endif
 	vt->init = handle_init;
 	vt->fini = cleanup;
     return 0;

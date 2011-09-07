@@ -37,11 +37,13 @@ struct k5scfg {
 	short ondelete;
 	short syncdisable;
 	short syncexpire;
+	LDAP * ldConn;
 };
 
 krb5_principal get_ad_principal(krb5_context kcx, struct k5scfg * cx, krb5_principal pin);
 int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout);
 void do_disable(LDAP * ldConn, char * dn, int disable);
+int get_next_dn(struct dnokay * out, FILE * in);
 
 kadm5_ret_t handle_modify(krb5_context kx, kadm5_hook_modinfo * modinfo,
 	int stage, kadm5_principal_ent_t pin, long mask);
