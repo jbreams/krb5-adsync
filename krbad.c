@@ -129,6 +129,7 @@ kadm5_ret_t handle_chpass(krb5_context kcx,
 		(char*)newpass, targetPrincipal, &result_code, 
 		&result_code_string, &result_string);
 	krb5_free_cred_contents(kcx, &creds);
+
 	if(rc == 0) {
 		if(!result_string.data)
 			com_err("kadmind", result_code, "Syncing password for %s on Active Directory: %s", 
@@ -137,6 +138,7 @@ kadm5_ret_t handle_chpass(krb5_context kcx,
 			com_err("kadmind", result_code, "Syncing password for %s on Active Directory: %s; %s",
 				targetUnparsed, result_code_string.data, result_string.data);
 	}
+
 	if(rc != 0 || result_code != 0)
 		krb5_set_error_message(kcx, rc, "Error setting password for %s: %s %s",
 			targetUnparsed, result_code_string.data, result_string.data);
