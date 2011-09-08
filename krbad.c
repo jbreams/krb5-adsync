@@ -1,5 +1,5 @@
 /*
-   Copyright 2011 The Trustees of Columbia University
+   Copyright 2011 The Trustees of Columbia University in the City of New York
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
