@@ -58,10 +58,8 @@ void cleanup(krb5_context kcx, kadm5_hook_modinfo * modinfo) {
 #endif
 	if(cx->updatefor) {
 		int i;
-		for(i = 0; i < cx->dncount; i++) {
-			if(cx->updatefor[i].dn)
-				free(cx->updatefor[i].dn);
-		}
+		for(i = 0; cx->updatefor[i].dn; i++)
+			free(cx->updatefor[i].dn);
 		free(cx->updatefor);
 	}
 	if(cx->ldConn)

@@ -163,7 +163,7 @@ int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char 
 			ldap_memfree(dn);
 		return 1;
 	}
-	else if(cx->updatefor && cx->dncount) {
+	else if(cx->updatefor) {
 		i = 0;
 		curdn = &cx->updatefor[i];
 	}
