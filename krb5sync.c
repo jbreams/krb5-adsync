@@ -113,7 +113,7 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 	struct k5scfg * cx = malloc(sizeof(struct k5scfg));
 	char * path = NULL, *buffer, *ktpath;
 	FILE * file = NULL;
-	int rc, i;
+	int rc, i, dncount = 0;
 	
 	if(cx == NULL)
 		return -ENOMEM;
@@ -187,7 +187,8 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 		free(buffer);
 	} else
 		cx->ldapretries = 3;
-	
+
+#ifdef ENABLE_DELETE_HOOK	
 	config_string(kcx, "ondelete", &buffer);
 	if(buffer) {
 		if(strcmp(buffer, "delete") == 0)
@@ -198,13 +199,14 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 			cx->ondelete = 0;
 		free(buffer);
 	}
-	
+#endif
+#ifdef ENABLE_MODIFY_HOOK	
 	krb5_appdefault_boolean(kcx, "krb5-sync", NULL, "syncdisable", 0, &cx->syncdisable);
 	krb5_appdefault_boolean(kcx, "krb5-sync", NULL, "syncexpire", 0, &cx->syncexpire);
+#endif
 	krb5_appdefault_boolean(kcx, "krb5-sync", NULL, "liveadobjects", 0, &rc);
 	
 	config_string(kcx, "adobjects", &path);
-	cx->dncount = 0;
 	if(!path) {
 		cx->updatefor = NULL;
 		return 0;
@@ -229,12 +231,12 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 		rc = fread(buffer, 4096, 1, file);
 		for(i = 0; buffer[i] != 0; i++) {
 			if(buffer[i] == '\n')
-				cx->dncount++;
+				dncount++;
 		}
 	} while(rc > 0);
 	free(buffer);
 	
-	cx->updatefor = malloc(sizeof(struct dnokay) * (cx->dncount + 1));
+	cx->updatefor = malloc(sizeof(struct dnokay) * (dncount + 1));
 	rewind(file);
 	i = 0;
 	while((rc = get_next_dn(&cx->updatefor[i], file)) == 0 && cx->updatefor[i].dn)

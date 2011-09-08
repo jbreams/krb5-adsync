@@ -31,23 +31,32 @@ struct k5scfg {
 	char * basedn;
 	char * password;
 	char * adobjects;
+#ifdef ENABLE_SASL_GSSAPI
 	krb5_keytab keytab;
+#endif
 	struct dnokay * updatefor;
-	unsigned int dncount;
 	int ldapretries;
+#ifdef ENABLE_DELETE_HOOK
 	short ondelete;
+#endif
+#ifdef ENABLE_MODIFY_HOOK
 	short syncdisable;
 	short syncexpire;
+#endif
 	LDAP * ldConn;
 };
 
 krb5_principal get_ad_principal(krb5_context kcx, struct k5scfg * cx, krb5_principal pin);
 int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout);
+#ifdef ENABLE_MODIFY_HOOK || ENABLE_DELETE_HOOK
 void do_disable(LDAP * ldConn, char * dn, int disable);
+#endif
 int get_next_dn(struct dnokay * out, FILE * in);
 
+#ifdef ENABLE_MODIFY_HOOK
 kadm5_ret_t handle_modify(krb5_context kx, kadm5_hook_modinfo * modinfo,
 	int stage, kadm5_principal_ent_t pin, long mask);
+#endif
 kadm5_ret_t handle_chpass(krb5_context context,
 	kadm5_hook_modinfo *modinfo,
 	int stage,
@@ -55,6 +64,7 @@ kadm5_ret_t handle_chpass(krb5_context context,
 	int n_ks_tuple,
 	krb5_key_salt_tuple *ks_tuple,
 	const char *newpass);
+#ifdef ENABLE_DELETE_HOOK
 kadm5_ret_t handle_remove(krb5_context lkcx, kadm5_hook_modinfo * modinfo,
 	int stage, krb5_principal lprinc);
-
+#endif
