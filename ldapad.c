@@ -50,35 +50,34 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
 #endif
 
 int get_ldap_conn(struct k5scfg * cx) {
-	int rc, i = 0;
+	int rc, i = 0, option = LDAP_VERSION3;
 #ifdef ENABLE_SASL_GSSAPI
 	unsigned int gsserr;
 	const char * oldccname;
 #endif
 
-	if(!cx->ldConn) {
-		int option = LDAP_VERSION3;
-		rc = ldap_initialize(&cx->ldConn, cx->ldapuri);
-		if(rc != 0) {
-			com_err("kadmind", rc, "Error initializing LDAP: %s",
-					ldap_err2string(rc));
-			return rc;
-		}
+	if(cx->ldConn)
+		ldap_unbind_s(cx->ldConn);
+	rc = ldap_initialize(&cx->ldConn, cx->ldapuri);
+	if(rc != 0) {
+		com_err("kadmind", rc, "Error initializing LDAP: %s",
+				ldap_err2string(rc));
+		return rc;
+	}
 
-		rc = ldap_set_option(cx->ldConn, LDAP_OPT_PROTOCOL_VERSION, &option);
-		if(rc != 0) {
-			com_err("kadmind", rc, "Error setting protocol version: %s",
-					ldap_err2string(rc));
-			return rc;
-		}
-		ldap_set_option(cx->ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
+	rc = ldap_set_option(cx->ldConn, LDAP_OPT_PROTOCOL_VERSION, &option);
+	if(rc != 0) {
+		com_err("kadmind", rc, "Error setting protocol version: %s",
+				ldap_err2string(rc));
+		return rc;
+	}
+	ldap_set_option(cx->ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 
-		rc = ldap_set_option(cx->ldConn, LDAP_OPT_TIMEOUT, &cx->ldtimeout);
-		if(rc != 0) {
-			com_err("kadmind", rc, "Error setting timeout to %d seconds: %s",
-					cx->ldtimeout.tv_sec, ldap_err2string(rc));
-			return rc;
-		}
+	rc = ldap_set_option(cx->ldConn, LDAP_OPT_TIMEOUT, &cx->ldtimeout);
+	if(rc != 0) {
+		com_err("kadmind", rc, "Error setting timeout to %d seconds: %s",
+				cx->ldtimeout.tv_sec, ldap_err2string(rc));
+		return rc;
 	}
 	
 #ifdef ENABLE_SASL_GSSAPI
