@@ -53,7 +53,7 @@ kadm5_ret_t handle_remove(krb5_context kcx, kadm5_hook_modinfo * modinfo,
 				targetUnparsed, ldap_err2string(rc));
 	}
 	else
-		do_disable(dn, 1);
+		do_disable(cx, dn, 1);
 	
 finished:
 	if(dn)
@@ -66,7 +66,7 @@ finished:
 #endif
 #if defined(ENABLE_DELETE_HOOK) || defined(ENABLE_MODIFY_HOOK)
 
-void do_disable(char * dn, int disable) {
+void do_disable(struct k5scfg * cx, char * dn, int disable) {
 	LDAPMessage * res = NULL;
 	LDAPMod mod, *modarray[2];
 	const char *attrs[] = { "userAccountControl", NULL };

@@ -50,7 +50,7 @@ krb5_principal get_ad_principal(krb5_context kcx, struct k5scfg * cx, krb5_princ
 int check_update_okay(struct k5scfg * cx, char * principal, char ** dnout);
 int get_ldap_conn(struct k5scfg * cx);
 #if defined(ENABLE_MODIFY_HOOK) || defined(ENABLE_DELETE_HOOK)
-void do_disable(char * dn, int disable);
+void do_disable(struct k5scfg * cx, char * dn, int disable);
 #endif
 int get_next_dn(struct dnokay * out, FILE * in);
 

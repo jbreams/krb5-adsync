@@ -47,9 +47,9 @@ kadm5_ret_t handle_modify(krb5_context kcx, kadm5_hook_modinfo * modinfo,
 	
 	if(mask & KADM5_ATTRIBUTES && cx->syncdisable) {
 		if(pin->attributes & KRB5_KDB_DISALLOW_ALL_TIX)
-			do_disable(dn, 1);
+			do_disable(cx, dn, 1);
 		else
-			do_disable(dn, 0);
+			do_disable(cx, dn, 0);
 	}
 	
 	if(mask & KADM5_PRINC_EXPIRE_TIME && cx->syncexpire &&
