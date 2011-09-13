@@ -54,12 +54,11 @@ int get_creds(krb5_context kcx, struct k5scfg * cx) {
 			krb5_cc_close(kcx, id);
 			return rc;
 		}
-#ifdef ENABLE_SASL_GSSAPI	
+
 		if(cx->keytab)
 			rc = krb5_get_init_creds_keytab(kcx, &creds, cx->ad_principal,
 				cx->keytab, 0, NULL, NULL);
 		else
-#endif
 			rc = krb5_get_init_creds_password(kcx, &creds, cx->ad_principal,
 				cx->password, NULL, NULL, 0, NULL, NULL);
 		if(rc != 0) {
@@ -107,15 +106,13 @@ kadm5_ret_t handle_chpass(krb5_context kcx,
 	
 	krb5_unparse_name(kcx, targetPrincipal, &targetUnparsed);
 	
-	rc = check_update_okay(cx, targetUnparsed, NULL, NULL);
+	rc = check_update_okay(cx, targetUnparsed, NULL);
 	if(rc != 1)
 		goto finished;
-#ifdef ENABLE_SASL_GSSAPI	
 	if(cx->keytab)
 		rc = krb5_get_init_creds_keytab(kcx, &creds, cx->ad_principal,
 			cx->keytab, 0, "kadmin/changepw", NULL);
 	else
-#endif
 		rc = krb5_get_init_creds_password(kcx, &creds, cx->ad_principal,
 			cx->password, NULL, NULL, 0, "kadmin/changepw", NULL);
 	if(rc != 0) {

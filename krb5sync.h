@@ -31,9 +31,7 @@ struct k5scfg {
 	char * basedn;
 	char * password;
 	char * adobjects;
-#ifdef ENABLE_SASL_GSSAPI
 	krb5_keytab keytab;
-#endif
 	struct dnokay * updatefor;
 	int ldapretries;
 #ifdef ENABLE_DELETE_HOOK
@@ -43,13 +41,15 @@ struct k5scfg {
 	short syncdisable;
 	short syncexpire;
 #endif
+	struct timeval ldtimeout;
 	LDAP * ldConn;
 };
 
 krb5_principal get_ad_principal(krb5_context kcx, struct k5scfg * cx, krb5_principal pin);
-int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout);
+int check_update_okay(struct k5scfg * cx, char * principal, char ** dnout);
+int get_ldap_conn(struct k5scfg * cx);
 #if defined(ENABLE_MODIFY_HOOK) || defined(ENABLE_DELETE_HOOK)
-void do_disable(LDAP * ldConn, char * dn, int disable);
+void do_disable(char * dn, int disable);
 #endif
 int get_next_dn(struct dnokay * out, FILE * in);
 

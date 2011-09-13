@@ -38,19 +38,18 @@ kadm5_ret_t handle_modify(krb5_context kcx, kadm5_hook_modinfo * modinfo,
 	krb5_principal targetPrincipal = get_ad_principal(kcx, cx, pin->principal);
 	char * targetUnparsed = NULL;
 	char * dn = NULL;
-	LDAP * ldConn = NULL;
 	int rc;
 	
 	krb5_unparse_name(kcx, targetPrincipal, &targetUnparsed);
-	rc = check_update_okay(cx, targetUnparsed, &ldConn, &dn);
+	rc = check_update_okay(cx, targetUnparsed, &dn);
 	if(rc != 1)
 		goto finished;
 	
 	if(mask & KADM5_ATTRIBUTES && cx->syncdisable) {
 		if(pin->attributes & KRB5_KDB_DISALLOW_ALL_TIX)
-			do_disable(ldConn, dn, 1);
+			do_disable(dn, 1);
 		else
-			do_disable(ldConn, dn, 0);
+			do_disable(dn, 0);
 	}
 	
 	if(mask & KADM5_PRINC_EXPIRE_TIME && cx->syncexpire &&
@@ -71,7 +70,7 @@ kadm5_ret_t handle_modify(krb5_context kcx, kadm5_hook_modinfo * modinfo,
 		modarray[0] = &mod;
 		modarray[1] = NULL;
 		
-		rc = ldap_modify_ext_s(ldConn, dn, modarray, NULL, NULL);
+		rc = ldap_modify_ext_s(cx->ldConn, dn, modarray, NULL, NULL);
 		if(rc != 0)
 			com_err("kadmind", rc, "Error setting expire time to %llu for %s: %s",
 				expireTime, dn, ldap_err2string(rc));

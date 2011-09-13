@@ -49,33 +49,37 @@ do_sasl_interact (LDAP * ld, unsigned flags, void *defaults, void *_interact)
 }
 #endif
 
-LDAP * get_ldap_conn(struct k5scfg * cx) {
-	int rc, option = LDAP_VERSION3, i = 0;
-	LDAP * ldConn;
+int get_ldap_conn(struct k5scfg * cx) {
+	int rc, i = 0;
 #ifdef ENABLE_SASL_GSSAPI
 	unsigned int gsserr;
 	const char * oldccname;
 #endif
 
-	if(cx->ldConn)
-			return cx->ldConn;
+	if(!cx->ldConn) {
+		int option = LDAP_VERSION3;
+		rc = ldap_initialize(&cx->ldConn, cx->ldapuri);
+		if(rc != 0) {
+			com_err("kadmind", rc, "Error initializing LDAP: %s",
+					ldap_err2string(rc));
+			return rc;
+		}
 
-	cx->ldConn = NULL;
-	rc = ldap_initialize(&ldConn, cx->ldapuri);
-	if(rc != 0) {
-		com_err("kadmind", rc, "Error initializing LDAP: %s",
-			ldap_err2string(rc));
-		return NULL;
+		rc = ldap_set_option(cx->ldConn, LDAP_OPT_PROTOCOL_VERSION, &option);
+		if(rc != 0) {
+			com_err("kadmind", rc, "Error setting protocol version: %s",
+					ldap_err2string(rc));
+			return rc;
+		}
+		ldap_set_option(cx->ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
+
+		rc = ldap_set_option(cx->ldConn, LDAP_OPT_TIMEOUT, &cx->ldtimeout);
+		if(rc != 0) {
+			com_err("kadmind", rc, "Error setting timeout to %d seconds: %s",
+					cx->ldtimeout.tv_sec, ldap_err2string(rc));
+			return rc;
+		}
 	}
-	
-	rc = ldap_set_option(ldConn, LDAP_OPT_PROTOCOL_VERSION, &option);
-	if(rc != 0) {
-		com_err("kadmind", rc, "Error setting protocol version: %s",
-			ldap_err2string(rc));
-		return NULL;
-	}
-	
-	ldap_set_option(ldConn, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 	
 #ifdef ENABLE_SASL_GSSAPI
 	if(!cx->binddn) {
@@ -87,7 +91,7 @@ LDAP * get_ldap_conn(struct k5scfg * cx) {
 
 		if(gss_krb5_ccache_name(&gsserr, CACHE_NAME, &oldccname) != GSS_S_COMPLETE) {
 			com_err("kadmind", rc,  "Error setting credentials cache.");
-			return NULL;
+			return rc;
 		}
 	}
 #endif
@@ -96,10 +100,10 @@ LDAP * get_ldap_conn(struct k5scfg * cx) {
 #ifdef ENABLE_SASL_GSSAPI
 		if(cx->binddn)
 #endif
-			rc = ldap_simple_bind_s(ldConn, cx->binddn, cx->password);
+			rc = ldap_simple_bind_s(cx->ldConn, cx->binddn, cx->password);
 #ifdef ENABLE_SASL_GSSAPI
 		else
-			rc = ldap_sasl_interactive_bind_s(ldConn, NULL, "GSSAPI",
+			rc = ldap_sasl_interactive_bind_s(cx->ldConn, NULL, "GSSAPI",
 				NULL, NULL, LDAP_SASL_QUIET, do_sasl_interact, NULL);
 #endif
 	} while(++i < cx->ldapretries && rc != 0);
@@ -111,50 +115,48 @@ LDAP * get_ldap_conn(struct k5scfg * cx) {
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error connecting to LDAP server: %s",
 			ldap_err2string(rc));
-		return NULL;
+		return rc;
 	}
-	
-	cx->ldConn = ldConn;
-	return ldConn;
+
+	return 0;
 }
 
-int check_update_okay(struct k5scfg * cx, char * principal, LDAP ** ldOut, char ** dnout) {
+int check_update_okay(struct k5scfg * cx, char * principal, char ** dnout) {
 	char * tmp, *filter, * dn;
 	int parts = 1, i = 0, rc, cp;
-	LDAP * ldConn = get_ldap_conn(cx);
 	LDAPMessage * msg = NULL;
 	char * noattrs[2] = { "1.1", NULL };
 	FILE * adobjects = NULL;
 	struct dnokay * curdn;
-			
+
 	filter = malloc(sizeof("(userPrincipalName=)") + strlen(principal) + 1);
 	sprintf(filter, "(userPrincipalName=%s)", principal);
-	rc = ldap_search_ext_s(ldConn, cx->basedn, LDAP_SCOPE_SUBTREE, filter,
+	rc = ldap_search_ext_s(cx->ldConn, cx->basedn, LDAP_SCOPE_SUBTREE, filter,
 		noattrs, 0, NULL, NULL, NULL, 0, &msg);
 
 	if(rc == LDAP_SERVER_DOWN || rc == LDAP_TIMELIMIT_EXCEEDED) {
-		ldOut = get_ldap_conn(cx);
-		if(ldOut == NULL)
-			return -1;
-		rc = ldap_search_ext_s(ldConn, cx->basedn, LDAP_SCOPE_SUBTREE, filter,
+		com_err("kadmind", rc, "LDAP connection has died (%s), attempting to "
+			"reconnect to active directory", ldap_err2string(rc));
+		rc = get_ldap_conn(cx);
+		if(rc != 0) {
+			free(filter);
+			return rc;
+		}
+		rc = ldap_search_ext_s(cx->ldConn, cx->basedn, LDAP_SCOPE_SUBTREE, filter,
 			noattrs, 0, NULL, NULL, NULL, 0, &msg);
 	}
 	free(filter);
 	if(rc != 0) {
-		if(ldOut)
-			*ldOut = NULL;
 		com_err("kadmind", rc, "Error searching for %s: %s",
 			principal, ldap_err2string(rc));
 		return rc;
 	}
 	
-	if(ldap_count_entries(ldConn, msg) == 0)
+	if(ldap_count_entries(cx->ldConn, msg) == 0)
 		return 0;
-	msg = ldap_first_entry(ldConn, msg);
-	dn = ldap_get_dn(ldConn, msg);
+	msg = ldap_first_entry(cx->ldConn, msg);
+	dn = ldap_get_dn(cx->ldConn, msg);
 	ldap_msgfree(msg);
-	if(ldOut)
-		*ldOut = ldConn;
 
 	if(cx->updatefor == NULL && !cx->adobjects) {
 		if(dnout)

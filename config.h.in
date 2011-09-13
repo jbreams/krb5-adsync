@@ -6,7 +6,7 @@
 /* Enables the modify hook code */
 #undef ENABLE_MODIFY_HOOK
 
-/* Enabled ldap_sasl_interactive_bind_s */
+/* Enables SASL GSSAPI and keytab code */
 #undef ENABLE_SASL_GSSAPI
 
 /* Define to 1 if you have the <gssapi/gssapi_krb5.h> header file. */

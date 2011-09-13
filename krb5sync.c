@@ -52,10 +52,8 @@ void cleanup(krb5_context kcx, kadm5_hook_modinfo * modinfo) {
 		memset(cx->password, 0, 128);
 		free(cx->password);
 	}
-#ifdef ENABLE_SASL_GSSAPI
 	if(cx->keytab)
 		krb5_kt_close(kcx, cx->keytab);
-#endif
 	if(cx->updatefor) {
 		int i;
 		for(i = 0; cx->updatefor[i].dn; i++)
@@ -124,10 +122,7 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 	config_string(kcx, "syncuser", &cx->ad_princ_unparsed);
 	config_string(kcx, "password", &path);
 	config_string(kcx, "binddn", &cx->binddn);
-	config_string(kcx, "ldapconnectretries", &buffer);
-#ifdef ENABLE_SASL_GSSAPI
 	config_string(kcx, "keytab", &ktpath);
-#endif
 	if(!cx->basedn || !cx->ldapuri || !strlen(cx->ad_princ_unparsed)) {
 		cleanup(kcx, *modinfo);
 		com_err("kadmind", KADM5_MISSING_CONF_PARAMS, "Must specify both basedn and ldapuri.");
@@ -141,7 +136,6 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 		return rc;
 	}
 	
-#ifdef ENABLE_SASL_GSSAPI
 	if(ktpath) {
 		rc = krb5_kt_resolve(kcx, ktpath, &cx->keytab);
 		free(ktpath);
@@ -151,9 +145,6 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 			return rc;
 		}
 	} else if(path) {
-#else
-	if(path) {
-#endif
 		file = fopen(path, "r");
 		free(path);
 		path = NULL;
@@ -179,12 +170,27 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 	rc = get_creds(kcx, cx);
 	if(rc != 0)
 		return rc;
-	
+
+	config_string(kcx, "ldapconnectretries", &buffer);
 	if(buffer) {
 		cx->ldapretries = atoi(buffer);
 		free(buffer);
 	} else
 		cx->ldapretries = 3;
+
+	config_string(kcx, "ldaptimeout", &buffer);
+	if(buffer) {
+		cx->ldtimeout.tv_sec = atoi(buffer);
+		free(buffer);
+	} else
+		cx->ldtimeout.tv_sec = -1;
+
+	rc = get_ldap_conn(cx);
+	if(rc != 0) {
+		com_err("kadmind", rc, "Failed to initialize LDAP connection to active directory. Cannot continue.");
+		cleanup(kcx, *modinfo);
+		return KADM5_NO_SRV;
+	}
 
 #ifdef ENABLE_DELETE_HOOK	
 	config_string(kcx, "ondelete", &buffer);

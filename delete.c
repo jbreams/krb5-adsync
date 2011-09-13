@@ -39,22 +39,21 @@ kadm5_ret_t handle_remove(krb5_context kcx, kadm5_hook_modinfo * modinfo,
 	krb5_principal targetPrincipal = get_ad_principal(kcx, cx, lprinc);
 	char * targetUnparsed = NULL;
 	char * dn = NULL;
-	LDAP * ldConn = NULL;
 	int rc;
 	
 	krb5_unparse_name(kcx, targetPrincipal, &targetUnparsed);
-	rc = check_update_okay(cx, targetUnparsed, &ldConn, &dn);
+	rc = check_update_okay(cx, targetUnparsed,&dn);
 	if(rc != 1)
 		goto finished;
 	
 	if(cx->ondelete == 1) {
-		rc = ldap_delete_s(ldConn, dn);
+		rc = ldap_delete_s(cx->ldConn, dn);
 		if(rc != 0)
 			com_err("kadmind", rc, "Error deleting %s: %s",
 				targetUnparsed, ldap_err2string(rc));
 	}
 	else
-		do_disable(ldConn, dn, 1);
+		do_disable(dn, 1);
 	
 finished:
 	if(dn)
@@ -67,7 +66,7 @@ finished:
 #endif
 #if defined(ENABLE_DELETE_HOOK) || defined(ENABLE_MODIFY_HOOK)
 
-void do_disable(LDAP * ldConn, char * dn, int disable) {
+void do_disable(char * dn, int disable) {
 	LDAPMessage * res = NULL;
 	LDAPMod mod, *modarray[2];
 	const char *attrs[] = { "userAccountControl", NULL };
@@ -76,7 +75,7 @@ void do_disable(LDAP * ldConn, char * dn, int disable) {
 	unsigned int acctcontrol, newacctcontrol;
 	int rc;
 	
-	rc = ldap_search_ext_s(ldConn, dn, LDAP_SCOPE_BASE, "(objectClass=*)",
+	rc = ldap_search_ext_s(cx->ldConn, dn, LDAP_SCOPE_BASE, "(objectClass=*)",
 		(char**)attrs, 0, NULL, NULL, NULL, 0, &res);
 	
 	if(rc != 0) {
@@ -85,8 +84,8 @@ void do_disable(LDAP * ldConn, char * dn, int disable) {
 		return;
 	}
 	
-	res = ldap_first_entry(ldConn, res);
-	vals = ldap_get_values_len(ldConn, res, "userAccountControl");
+	res = ldap_first_entry(cx->ldConn, res);
+	vals = ldap_get_values_len(cx->ldConn, res, "userAccountControl");
 	ldap_msgfree(res);
 	if(ldap_count_values_len(vals) != 1) {
 		com_err("kadmind", rc, "userAccountControl not returned from AD.");
@@ -116,7 +115,7 @@ void do_disable(LDAP * ldConn, char * dn, int disable) {
 	modarray[0] = &mod;
 	modarray[1] = NULL;
 	
-	rc = ldap_modify_ext_s(ldConn, dn, modarray, NULL, NULL);
+	rc = ldap_modify_ext_s(cx->ldConn, dn, modarray, NULL, NULL);
 	if(rc != 0) {
 		com_err("kadmind", rc, "Error modifying %s with new UAC %x: %s",
 			dn, newacctcontrol, ldap_err2string(rc));
