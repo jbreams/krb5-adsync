@@ -208,6 +208,7 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 	krb5_appdefault_boolean(kcx, "krb5-sync", NULL, "syncdisable", 0, &cx->syncdisable);
 	krb5_appdefault_boolean(kcx, "krb5-sync", NULL, "syncexpire", 0, &cx->syncexpire);
 #endif
+	krb5_appdefault_boolean(kcx, "krb5-sync", NULL, "failopen", 0, &cx->failopen);
 	krb5_appdefault_boolean(kcx, "krb5-sync", NULL, "liveadobjects", 0, &rc);
 	
 	config_string(kcx, "adobjects", &path);

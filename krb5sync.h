@@ -41,6 +41,7 @@ struct k5scfg {
 	short syncdisable;
 	short syncexpire;
 #endif
+	short failopen;
 	struct timeval ldtimeout;
 	LDAP * ldConn;
 };

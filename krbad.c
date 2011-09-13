@@ -107,8 +107,18 @@ kadm5_ret_t handle_chpass(krb5_context kcx,
 	krb5_unparse_name(kcx, targetPrincipal, &targetUnparsed);
 	
 	rc = check_update_okay(cx, targetUnparsed, NULL);
-	if(rc != 1)
+	if(rc != 1) {
+		if(rc != 0) {
+			if(cx->failopen) {
+				com_err("kadmind", rc, "Failed checking %s against active directory - the password will be changed but not synchronized (plugin is configured to fail open).", targetUnparsed);
+				rc = 0;
+			} else {
+				com_err("kadmind", rc, "Failed checking %s against active directory - the password change will be aborted.", targetUnparsed);
+				rc = KADM5_FAILURE;
+			}
+		}
 		goto finished;
+	}
 	if(cx->keytab)
 		rc = krb5_get_init_creds_keytab(kcx, &creds, cx->ad_principal,
 			cx->keytab, 0, "kadmin/changepw", NULL);
