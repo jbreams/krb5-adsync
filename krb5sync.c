@@ -48,17 +48,18 @@ void cleanup(krb5_context kcx, kadm5_hook_modinfo * modinfo) {
 		free(cx->ad_princ_unparsed);
 	if(cx->binddn)
 		free(cx->binddn);
-	if(cx->password) {
+	if(*cx->password) {
 		memset(cx->password, 0, 128);
-		free(cx->password);
 	}
 	if(cx->keytab)
 		krb5_kt_close(kcx, cx->keytab);
 	if(cx->updatefor) {
-		int i;
-		for(i = 0; cx->updatefor[i].dn; i++)
-			free(cx->updatefor[i].dn);
-		free(cx->updatefor);
+		struct dnokay * lock = cx->updatefor->next;
+		do {
+			free(cx->updatefor);
+			cx->updatefor = lock;
+			lock = cx->updatefor->next;
+		} while(cx->updatefor);
 	}
 	if(cx->ldConn)
 		ldap_unbind_s(cx->ldConn);
@@ -67,42 +68,34 @@ void cleanup(krb5_context kcx, kadm5_hook_modinfo * modinfo) {
 }
 
 int get_next_dn(struct dnokay * out, FILE * in) {
-	char * buffer = malloc(4096);
+	char *check;
 	size_t len, i = 0, valid = 0;
-	if(!fgets(buffer, 4096, in)) {
-		free(buffer);
-		return errno;
-	}
-	if(feof(in)) {
-		free(buffer);
-		out->dn = NULL;
+	
+	check = fgets(out->dn, sizeof(out->dn), in);
+	if(check == NULL) {
+		if(ferror(in)) {
+			com_err("kadmind", 0, "Error reading from DN file. %m");
+			return -1;
+		}
 		return 0;
 	}
 
-	len = strlen(buffer);
-	if(len < 3) { // Minimum length of a valid DN (o=o)
-		free(buffer);
-		return -EINVAL;
-	}
-	out->dn = buffer;
+	if((len = strlen(out->dn)) < 4) // Shortest possible dn o=o\n
+		return -2;
+	if(out->dn[len - 1] != '\n')
+		return -2;
+	out->dn[len - 1] = 0;
 	out->parts = 1;
 	do {
-		if(out->dn[i] == '\n')
-			out->dn[i] = 0;
-		else if(out->dn[i] == ',')
+		if(out->dn[i] == ',')
 			out->parts++;
 		else if(out->dn[i] == '=')
 			valid = 1;
-		else
-			out->dn[i] = tolower(out->dn[i]);
 	} while(out->dn[++i] != 0);
 
-	if(!valid) {
-		free(out->dn);
-		return -EINVAL;
-	}
-	
-	return 0;
+	if(!valid)
+		return -2;
+	return 1;
 }
 
 kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
@@ -112,7 +105,7 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 	int rc, i, dncount = 0;
 	
 	if(cx == NULL)
-		return -ENOMEM;
+		return KADM5_FAILURE;
 	
 	memset(cx, 0, sizeof(struct k5scfg));
 
@@ -125,8 +118,8 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 	config_string(kcx, "keytab", &ktpath);
 	if(!cx->basedn || !cx->ldapuri || !strlen(cx->ad_princ_unparsed)) {
 		cleanup(kcx, *modinfo);
-		com_err("kadmind", KADM5_MISSING_CONF_PARAMS, "Must specify both basedn and ldapuri.");
-		return KADM5_MISSING_CONF_PARAMS;
+		com_err("kadmind", KADM5_MISSING_KRB5_CONF_PARAMS, "Must specify both basedn and ldapuri.");
+		return KADM5_MISSING_KRB5_CONF_PARAMS;
 	}
 	
 	rc = krb5_parse_name(kcx, cx->ad_princ_unparsed, &cx->ad_principal);
@@ -148,23 +141,24 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 		file = fopen(path, "r");
 		free(path);
 		path = NULL;
-		cx->password = malloc(128);
 		*cx->password = 0;
 		fgets(cx->password, 128, file);
 		fclose(file);
 		rc = strlen(cx->password) - 1;
-		if(cx->password[rc] == '\n')
+		if(cx->password[rc] == '\n') {
 			cx->password[rc] = 0;
-		if(!cx->password || strlen(cx->password) == 0) {
+			rc--;
+		}
+		if(rc == 0) {
 			cleanup(kcx, *modinfo);
-			com_err("kadmind", KADM5_MISSING_CONF_PARAMS, "Must specify a password to connect to AD");
-			return KADM5_MISSING_CONF_PARAMS;
+			com_err("kadmind", KADM5_MISSING_KRB5_CONF_PARAMS, "Must specify a password to connect to AD");
+			return KADM5_MISSING_KRB5_CONF_PARAMS;
 		}
 	}
 	else {
-		com_err("kadmind", KADM5_MISSING_CONF_PARAMS, "Must specify either a password file or a keytab");
+		com_err("kadmind", KADM5_MISSING_KRB5_CONF_PARAMS, "Must specify either a password file or a keytab");
 		cleanup(kcx, *modinfo);
-		return KADM5_MISSING_CONF_PARAMS;
+		return KADM5_MISSING_KRB5_CONF_PARAMS;
 	}
 
 	rc = get_creds(kcx, cx);
@@ -230,29 +224,31 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 		cleanup(kcx, *modinfo);
 		return 0;
 	}
-	buffer = malloc(4096);
+
 	do {
-		memset(buffer, 0, 4096);
-		rc = fread(buffer, 4096, 1, file);
-		for(i = 0; buffer[i] != 0; i++) {
-			if(buffer[i] == '\n')
-				dncount++;
+		struct dnokay * curdn = malloc(sizeof(struct dnokay));
+		if(!curdn) {
+			com_err("kadmind", KADM5_FAILURE, "Unable to allocate memory for DN structure.");
+			cleanup(kcx, *modinfo);
+			return KADM5_FAILURE;
 		}
-	} while(rc > 0);
-	free(buffer);
-	
-	cx->updatefor = malloc(sizeof(struct dnokay) * (dncount + 1));
-	rewind(file);
-	i = 0;
-	while((rc = get_next_dn(&cx->updatefor[i], file)) == 0 && cx->updatefor[i].dn)
-		i++;
+
+		rc = get_next_dn(curdn, file);
+		if(rc == 1) {
+			curdn->next = cx->updatefor;
+			cx->updatefor = curdn;
+		}
+		else {
+			if(rc == -2)
+				com_err("kadmind", KADM5_FAILURE, "DN from file is invalid: %s", curdn->dn);
+			free(curdn);
+		}
+	} while(rc == 1);
 	fclose(file);
 
 	if(rc != 0) {
-		com_err("kadmind", rc, "Error reading DN objects file: %s",
-			strerror(rc));
 		cleanup(kcx, *modinfo);
-		return KADM5_MISSING_CONF_PARAMS;
+		return KADM5_MISSING_KRB5_CONF_PARAMS;
 	}
 	return 0;
 }

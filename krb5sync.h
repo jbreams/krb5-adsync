@@ -19,8 +19,9 @@
 #define CACHE_NAME "MEMORY:krb5_sync"
 
 struct dnokay {
-	char * dn;
+	char dn[4096];
 	int parts;
+	struct dnokay * next;
 };
 
 struct k5scfg {
@@ -29,7 +30,7 @@ struct k5scfg {
 	char * ldapuri;
 	char * binddn;
 	char * basedn;
-	char * password;
+	char password[128];
 	char * adobjects;
 	krb5_keytab keytab;
 	struct dnokay * updatefor;

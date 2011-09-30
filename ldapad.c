@@ -165,22 +165,19 @@ int check_update_okay(struct k5scfg * cx, char * principal, char ** dnout) {
 		return 1;
 	}
 	else if(cx->updatefor) {
-		i = 0;
-		curdn = &cx->updatefor[i];
+		curdn = cx->updatefor;
 	}
 	else if(cx->adobjects) {
 		adobjects = fopen(cx->adobjects, "r");
 		if(adobjects == NULL) {
-			rc = errno;
-			com_err("kadmind", rc, "Error opening objects file: %s (%s)",
-				strerror(rc), cx->adobjects);
+			com_err("kadmind", KADM5_FAILURE, "Error opening objects file: %m (%s)", cx->adobjects);
 			ldap_memfree(dn);
 			return 0;
 		}
 		curdn = malloc(sizeof(struct dnokay));
 		rc = get_next_dn(curdn, adobjects);
-		if(rc != 0) {
-			com_err("kadmind", rc, "Error reading DN from objects file: %s (%s)",
+		if(rc < 0) {
+			com_err("kadmind", KADM5_FAILURE, "Error reading DN from objects file: %m (%s)",
 				strerror(rc), cx->adobjects);
 			ldap_memfree(dn);
 			return 0;
@@ -192,8 +189,6 @@ int check_update_okay(struct k5scfg * cx, char * principal, char ** dnout) {
 	while (*tmp != 0) {
 		if(*tmp == ',')
 			parts++;
-		else
-			*tmp = tolower(*tmp);
 		tmp++;
 	}
 
@@ -209,25 +204,24 @@ int check_update_okay(struct k5scfg * cx, char * principal, char ** dnout) {
 			c--;
 		}
 
-		if(strcmp(tmp, curdn->dn) == 0) {
+		if(strcasecmp(tmp, curdn->dn) == 0) {
 			rc = 1;
 			break;
 		}
 
 next_obj:
 		if(adobjects) {
-			free(curdn->dn);
 			c = get_next_dn(curdn, adobjects);
-			if(c != 0) {
-				com_err("kadmind", rc, "Error reading DN from objects file: %s (%s)",
-					strerror(rc), cx->adobjects);
-				ldap_memfree(dn);
-				return 0;
+			if(c < 0) {
+				if(c == -2)
+					com_err("kadmind", KADM5_FAILURE, "DN read from file is invalid: %s",
+						curdn->dn);
+				break;
 			}
 		}
 		else
-			curdn = &cx->updatefor[++i];
-	} while(curdn->dn);
+			curdn = curdn->next;
+	} while(curdn && curdn->dn);
 	
 	if(dnout)
 		*dnout = dn;
