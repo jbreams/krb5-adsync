@@ -68,11 +68,9 @@ void cleanup(krb5_context kcx, kadm5_hook_modinfo * modinfo) {
 }
 
 int get_next_dn(struct dnokay * out, FILE * in) {
-	char *check;
 	size_t len, i = 0, valid = 0;
-	
-	check = fgets(out->dn, sizeof(out->dn), in);
-	if(check == NULL) {
+
+	if(fgets(out->dn, sizeof(out->dn), in) == NULL) {
 		if(ferror(in)) {
 			com_err("kadmind", 0, "Error reading from DN file. %m");
 			return -1;
@@ -84,7 +82,7 @@ int get_next_dn(struct dnokay * out, FILE * in) {
 		return -2;
 	if(out->dn[len - 1] != '\n')
 		return -2;
-	out->dn[len - 1] = 0;
+	out->dn[len - 1] = '\0';
 	out->parts = 1;
 	do {
 		if(out->dn[i] == ',')
@@ -226,8 +224,9 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 	}
 
 	do {
-		struct dnokay * curdn = malloc(sizeof(struct dnokay));
-		if(!curdn) {
+		struct dnokay * curdn;
+
+		if((curdn = malloc(sizeof(struct dnokay))) == NULL) {
 			com_err("kadmind", KADM5_FAILURE, "Unable to allocate memory for DN structure.");
 			cleanup(kcx, *modinfo);
 			return KADM5_FAILURE;
@@ -239,9 +238,12 @@ kadm5_ret_t handle_init(krb5_context kcx, kadm5_hook_modinfo ** modinfo) {
 			cx->updatefor = curdn;
 		}
 		else {
-			if(rc == -2)
-				com_err("kadmind", KADM5_FAILURE, "DN from file is invalid: %s", curdn->dn);
 			free(curdn);
+			if(rc == -2) {
+				com_err("kadmind", KADM5_FAILURE, "DN from file is invalid: %s", curdn->dn);
+				cleanup(kcx, *modinfo);
+				return KADM5_FAILURE;
+			}
 		}
 	} while(rc == 1);
 	fclose(file);

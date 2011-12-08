@@ -212,7 +212,7 @@ int check_update_okay(struct k5scfg * cx, char * principal, char ** dnout) {
 next_obj:
 		if(adobjects) {
 			c = get_next_dn(curdn, adobjects);
-			if(c < 0) {
+			if(c < 1) {
 				if(c == -2)
 					com_err("kadmind", KADM5_FAILURE, "DN read from file is invalid: %s",
 						curdn->dn);
@@ -221,7 +221,7 @@ next_obj:
 		}
 		else
 			curdn = curdn->next;
-	} while(curdn && curdn->dn);
+	} while(curdn);
 	
 	if(dnout)
 		*dnout = dn;
