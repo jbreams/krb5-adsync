@@ -93,6 +93,8 @@ kadm5_ret_t handle_chpass(krb5_context kcx,
 {
 	if(stage == KADM5_HOOK_STAGE_POSTCOMMIT)
 		return 0;
+	if(newpass == NULL) // Don't sync null passwords 
+		return 0;
 	
 	struct k5scfg * cx = (struct k5scfg*)modinfo;
 	krb5_principal targetPrincipal = get_ad_principal(kcx, cx, princ);
